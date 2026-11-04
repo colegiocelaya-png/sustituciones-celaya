@@ -517,6 +517,7 @@ function assign(day, date, ctx, resetAll) {
       if (tier === 1) return isPrim(T);
       if (tier === 3) return isSpecial(T.role);
       if (tier === 4) return T.role === 'directivo' && (dirToday[T.id] || 0) < ctx.maxDir;
+      if (tier === 9) return T.role === 'directivo';
       return false;
     }
     if (tier === 1) return isPrim(T) && t === 'l';
@@ -525,6 +526,7 @@ function assign(day, date, ctx, resetAll) {
     if (tier === 7) return isPrim(T) && t === 's';
     if (tier === 3) return isSpecial(T.role) && t !== 'n';
     if (tier === 4) return T.role === 'directivo' && t !== 'n' && (dirToday[T.id] || 0) < ctx.maxDir;
+    if (tier === 9) return T.role === 'directivo' && t !== 'n';
     return false;
   });
 
@@ -532,7 +534,7 @@ function assign(day, date, ctx, resetAll) {
     if (roleOf(n.absentId) === 'infantil') {
       // Infantil: 1 ausente -> profesora de apoyo de infantil; 2 o más -> PT y AL (mejor quien ya da clase en infantil en esa franja)
       const infN = (day.absences || []).filter((a) => a.slots.includes(n.slot) && roleOf(a.tid) === 'infantil').length;
-      const kinds = infN >= 2 ? ['pt', 'apoyoinf', 'dir'] : ['apoyoinf', 'pt', 'dir'];
+      const kinds = infN >= 2 ? ['pt', 'apoyoinf', 'dir', 'dir9'] : ['apoyoinf', 'pt', 'dir', 'dir9'];
       let got = null;
       for (const kind of kinds) {
         const list = teachers.filter((T) => {
@@ -544,7 +546,7 @@ function assign(day, date, ctx, resetAll) {
           if (t === 'n') return false;
           if (kind === 'apoyoinf') return T.role === 'apoyoinf';
           if (kind === 'pt') return isSpecial(T.role);
-          return T.role === 'directivo' && !!T.cubreInf && (dirToday[T.id] || 0) < ctx.maxDir;
+          return T.role === 'directivo' && !!T.cubreInf && (kind === 'dir9' || (dirToday[T.id] || 0) < ctx.maxDir);
         });
         if (!list.length) continue;
         const rank = (T) => {
@@ -553,15 +555,15 @@ function assign(day, date, ctx, resetAll) {
           if (kind === 'apoyoinf') return t === 'c' ? 1 : 0;
           return 0;
         };
-        const score = (T) => kind === 'dir' ? lectiveDay(T, wd) + (dirToday[T.id] || 0) : (load[T.id] || 0) / capacity(T);
+        const score = (T) => kind.startsWith('dir') ? lectiveDay(T, wd) + (dirToday[T.id] || 0) : (load[T.id] || 0) / capacity(T);
         list.sort((a, b) => rank(a) - rank(b) || score(a) - score(b) || a.name.localeCompare(b.name, 'es'));
         got = { T: list[0], kind, fb: kind !== kinds[0] };
         break;
       }
       if (got) {
         mark(n.slot, got.T.id);
-        if (got.kind === 'dir') dirToday[got.T.id] = (dirToday[got.T.id] || 0) + 1;
-        out.push({ ...n, subId: got.T.id, tier: got.kind === 'apoyoinf' ? 5 : got.kind === 'pt' ? 3 : 4, fb: got.fb, manual: false });
+        if (got.kind.startsWith('dir')) dirToday[got.T.id] = (dirToday[got.T.id] || 0) + 1;
+        out.push({ ...n, subId: got.T.id, tier: got.kind === 'apoyoinf' ? 5 : got.kind === 'pt' ? 3 : 4, fb: got.fb || got.kind === 'dir9', manual: false });
       } else out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
       continue;
     }
@@ -571,26 +573,26 @@ function assign(day, date, ctx, resetAll) {
     //  1 ausente: libre, coordinación, directivo (no se quitan apoyos)
     //  2 ausentes: libre, coordinación, apoyo (y speaking), directivo
     //  3 o más: libre, coordinación, apoyo (y speaking), PT/AL, directivo
-    const order = absentNow <= 1 ? [1, 6, 4] : absentNow === 2 ? [1, 6, 2, 7, 4] : [1, 6, 2, 7, 3, 4];
+    const order = absentNow <= 1 ? [1, 6, 4, 9] : absentNow === 2 ? [1, 6, 2, 7, 4, 9] : [1, 6, 2, 7, 3, 4, 9];
     let picked = null, pickedTier = 0;
     for (const tier of order) {
       const list = candidates(tier, n.slot, n);
       if (!list.length) continue;
       const rank = (T) => {
         if (tier === 2 && n.slot !== 'R') { const c = cellOf(T, wd, n.slot); return c && c.g && n.place && norm(n.place).includes(norm(c.g)) ? 0 : 1; }
-        if (!(tier === 3 || tier === 4) || n.slot === 'R') return 0;
+        if (!(tier === 3 || tier === 4 || tier === 9) || n.slot === 'R') return 0;
         const c = cellOf(T, wd, n.slot);
         return ({ l: 0, o: 1, s: 1, a: 2, c: 3 })[c ? c.t : 'c'];
       };
       // Directivos: compensar clases del día con sustituciones. Resto: sustituciones pasadas en proporción a sus huecos.
-      const score = (T) => tier === 4 ? lectiveDay(T, wd) + (dirToday[T.id] || 0) : (load[T.id] || 0) / capacity(T);
+      const score = (T) => (tier === 4 || tier === 9) ? lectiveDay(T, wd) + (dirToday[T.id] || 0) : (load[T.id] || 0) / capacity(T);
       list.sort((a, b) => rank(a) - rank(b) || score(a) - score(b) || (load[a.id] || 0) - (load[b.id] || 0) || a.name.localeCompare(b.name, 'es'));
       picked = list[0]; pickedTier = tier; break;
     }
     if (picked) {
       mark(n.slot, picked.id);
       if (picked.role === 'directivo') dirToday[picked.id] = (dirToday[picked.id] || 0) + 1;
-      out.push({ ...n, subId: picked.id, tier: pickedTier, fb: false, manual: false });
+      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier, fb: pickedTier === 9, manual: false });
     } else {
       out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
     }
@@ -1812,9 +1814,9 @@ const Centro = {
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
-        h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
+        h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
       h('p', { class: 'muted small' }, 'Huelga: cuando una ausencia se marca como huelga, solo la pueden cubrir los profesores marcados como servicios mínimos ese día, con el mismo orden de criterios. El motivo solo lo ves tú.'),
-      h('p', { class: 'muted small' }, 'Si en ninguno de los niveles permitidos queda nadie, la sustitución se queda “sin cubrir” para que la resuelvas a mano. Entre el resto, elige a quien menos ha sustituido en el pasado en proporción a sus huecos y apoyos semanales, así el profesorado de primaria, que tiene más, sustituye más de forma natural y los especialistas (inglés, música, educación física) no quedan cargados. Los recreos se cubren con quien no tenga turno de patio ese día.')));
+      h('p', { class: 'muted small' }, 'Si en ninguno de los niveles permitidos queda nadie, el equipo directivo la cubre siempre, aunque supere el máximo diario (se marca como “criterio ampliado”). Entre el resto, elige a quien menos ha sustituido en el pasado en proporción a sus huecos y apoyos semanales, así el profesorado de primaria, que tiene más, sustituye más de forma natural y los especialistas (inglés, música, educación física) no quedan cargados. Los recreos se cubren con quien no tenga turno de patio ese día.')));
     // ajustes
     const max = h('input', { type: 'number', id: 'max-dir', min: 0, max: 9, value: S.school.maxDir || 2, onchange: (e) => { const v = Math.max(0, Math.min(9, parseInt(e.target.value, 10) || 0)); saveSchool((s) => { s.maxDir = v; }); } });
     const times = h('div', { class: 'times' }, SLOT_ORDER.map((s) => h('label', { class: 'field' }, h('span', null, slotLabel(s)),
