@@ -43,18 +43,36 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   function showLogin(msg, prefill) {
+    var inp = 'width:100%;box-sizing:border-box;min-height:48px;font:inherit;padding:0 12px;border-radius:12px;border:1px solid rgba(0,0,0,.3);margin-top:6px';
     var o = ui('<h1 style="font-size:1.35rem;text-align:center;margin:0 0 4px">Sustituciones</h1>' +
       '<p style="text-align:center;margin:0 0 16px;opacity:.75">CEIP Gabriel Celaya</p>' +
       (msg ? '<p role="alert" style="background:#fde8e8;color:#7a1010;padding:10px 12px;border-radius:10px;margin:0 0 12px">' + esc(msg) + '</p>' : '') +
       '<label for="lg-mail" style="font-weight:700">Tu correo</label>' +
-      '<input id="lg-mail" type="email" autocomplete="email" inputmode="email" placeholder="nombre@correo.es" value="' + esc(prefill || '') + '" style="width:100%;box-sizing:border-box;min-height:48px;font:inherit;padding:0 12px;border-radius:12px;border:1px solid rgba(0,0,0,.3);margin-top:6px">' +
-      '<button id="lg-link" style="' + primary + '">Enviarme un enlace de acceso</button>' +
+      '<input id="lg-mail" type="email" autocomplete="username" inputmode="email" placeholder="nombre@correo.es" value="' + esc(prefill || '') + '" style="' + inp + '">' +
+      '<label for="lg-pass" style="font-weight:700;display:block;margin-top:12px">Contraseña</label>' +
+      '<input id="lg-pass" type="password" autocomplete="current-password" placeholder="La que te ha dado la jefatura" style="' + inp + '">' +
+      '<button id="lg-pw" style="' + primary + '">Entrar</button>' +
+      '<p style="text-align:center;margin:14px 0 0;opacity:.7;font-size:.9rem">¿Sin contraseña?</p>' +
+      '<button id="lg-link" style="' + plain + '">Enviarme un enlace de acceso</button>' +
       '<button id="lg-google" style="' + plain + '">Entrar con Google</button>' +
       '<p style="font-size:.85rem;opacity:.7;margin:14px 0 0">Solo pueden entrar los correos que ha autorizado la jefatura de estudios.</p>');
+    o.querySelector('#lg-pw').onclick = signInPassword;
+    o.querySelector('#lg-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') signInPassword(); });
     o.querySelector('#lg-link').onclick = sendLink;
     o.querySelector('#lg-google').onclick = function () {
-      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function (e) { if (e && e.code !== 'auth/popup-closed-by-user') showLogin('No se pudo entrar con Google. Prueba con el enlace por correo.'); });
+      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function (e) { if (e && e.code !== 'auth/popup-closed-by-user') showLogin('No se pudo entrar con Google. Prueba con la contraseña o el enlace por correo.'); });
     };
+  }
+  function signInPassword() {
+    var email = ($('#lg-mail').value || '').trim().toLowerCase();
+    var pass = $('#lg-pass').value || '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showLogin('Escribe un correo válido.', email);
+    if (!pass) return showLogin('Escribe la contraseña que te dio la jefatura.', email);
+    var b = $('#lg-pw'); b.disabled = true; b.textContent = 'Entrando…';
+    auth.signInWithEmailAndPassword(email, pass).catch(function (e) {
+      var wrong = e && /wrong-password|invalid-credential|user-not-found|invalid-login/.test(e.code || '');
+      showLogin(wrong ? 'Correo o contraseña incorrectos. Pide a la jefatura que te genere una nueva.' : 'No se pudo entrar. Inténtalo de nuevo.', email);
+    });
   }
   function sendLink() {
     var email = ($('#lg-mail').value || '').trim().toLowerCase();
@@ -75,32 +93,12 @@
     if (!auth.isSignInWithEmailLink(location.href)) return Promise.resolve();
     var email = null;
     try { email = localStorage.getItem(LS_EMAIL); } catch (e) {}
-    var link = location.href;
-    function clean() { history.replaceState(null, '', location.origin + '/'); }
-    function attempt(mail) {
-      return auth.signInWithEmailLink(mail, link).then(function () {
-        try { localStorage.removeItem(LS_EMAIL); } catch (e) {}
-        clean();
-      }).catch(function (e) {
-        clean();
-        var bad = e && e.code === 'auth/invalid-email';
-        showLogin(bad ? 'Ese correo no coincide con el del enlace. Pide un enlace nuevo con el mismo correo.' : 'El enlace ha caducado o ya se usó. Pide uno nuevo y ábrelo directamente (algunos correos lo abren antes de tiempo).');
-      });
-    }
-    if (email) return attempt(email);
-    // Abierto en otro navegador: pedimos el correo en pantalla (sin ventanas emergentes).
-    return new Promise(function (resolve) {
-      var o = ui('<h1 style="font-size:1.25rem;text-align:center;margin:0 0 8px">Confirma tu correo</h1>' +
-        '<p style="text-align:center;margin:0 0 12px">Escribe el correo al que te llegó el enlace.</p>' +
-        '<input id="cf-mail" type="email" autocomplete="email" inputmode="email" aria-label="Tu correo" style="width:100%;box-sizing:border-box;min-height:48px;font:inherit;padding:0 12px;border-radius:12px;border:1px solid rgba(0,0,0,.3)">' +
-        '<button id="cf-go" style="' + primary + '">Entrar</button>');
-      o.querySelector('#cf-go').onclick = function () {
-        var m = (o.querySelector('#cf-mail').value || '').trim().toLowerCase();
-        if (!m) return;
-        o.querySelector('#cf-go').disabled = true;
-        attempt(m).then(resolve);
-      };
-    });
+    if (!email) email = (window.prompt('Escribe el correo al que llegó el enlace') || '').trim().toLowerCase();
+    if (!email) return Promise.resolve();
+    return auth.signInWithEmailLink(email, location.href).then(function () {
+      try { localStorage.removeItem(LS_EMAIL); } catch (e) {}
+      history.replaceState(null, '', location.origin + '/');
+    }).catch(function () { history.replaceState(null, '', location.origin + '/'); showLogin('El enlace ha caducado o ya se usó. Pide uno nuevo.'); });
   }
 
   /* ---------- estado de sesión ---------- */
@@ -201,6 +199,12 @@
       });
       return Promise.all(jobs).then(function () { return jobs.length; });
     },
-    remove: function (email) { return fs.doc('access/' + email).delete(); }
+    remove: function (email) { return fs.doc('access/' + email).delete(); },
+    // Crea o restablece cuentas con contraseña (la jefatura se las da a cada profesor)
+    passwords: function (emails) {
+      return auth.currentUser.getIdToken().then(function (t) {
+        return fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ emails: emails }) });
+      }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); }).then(function (j) { return j.users || []; });
+    }
   };
 })();

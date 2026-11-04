@@ -236,6 +236,7 @@ textarea { width: 100%; resize: vertical; }
 .aviso-place { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-weight: 700; font-size: .9rem; }
 .tc-big { font: 700 1.15rem var(--font-d); font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .aviso { grid-template-columns: auto 1fr; } .aviso > .btn { grid-column: 1 / -1; width: 100%; } }
+.pwlist{white-space:pre-wrap;word-break:break-all;background:var(--bg,#FBEFED);border-radius:10px;padding:10px;font:600 .95rem ui-monospace,Menlo,Consolas,monospace;user-select:all;margin:8px 0}.card.inner{box-shadow:none;border:1px solid rgba(0,0,0,.15);margin:10px 0}
 </style>
 
 <style>
@@ -1796,10 +1797,31 @@ const Centro = {
   accessCard() {
     const list = (S.access || []).slice().sort((a, b) => (a.role === b.role ? a.id.localeCompare(b.id) : a.role === 'admin' ? -1 : 1));
     const ta = h('textarea', { rows: 4, 'aria-label': 'Correos a añadir', placeholder: 'maria@colegio.es\njuan@colegio.es\ndirectora@colegio.es, jefatura' });
+    const res = h('div', { class: 'pwres' });
+    const showPw = (users) => {
+      S.pwRes = users; res.textContent = '';
+      if (!users.length) return;
+      const text = users.map((u) => u.email + '\t' + (u.password || ('(' + u.error + ')'))).join('\n');
+      res.append(h('div', { class: 'card inner' }, h('b', null, 'Contraseñas nuevas'),
+        h('p', { class: 'muted small' }, 'Cópialas ahora y entrégalas a cada persona: no se pueden volver a ver (puedes generar otra cuando quieras).'),
+        h('pre', { class: 'pwlist' }, text),
+        h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('Copiadas'); } catch (e) { toast('Selecciona el texto y cópialo a mano.', true); } } }, 'Copiar'))));
+    };
+    showPw(S.pwRes || []);
+    const gen = async (emails, btn) => {
+      if (btn) btn.disabled = true;
+      try { showPw(await window.accessApi.passwords(emails)); }
+      catch (e) { toast('No se pudieron crear. Comprueba que la clave del servidor está en Vercel.', true); }
+      if (btn) btn.disabled = false;
+    };
+    const teachersOnly = list.filter((a) => a.role !== 'admin').map((a) => a.id);
     return h('div', { class: 'card' }, h('h3', null, 'Quién puede entrar'),
       h('p', { class: 'muted small' }, 'Solo estos correos pueden abrir la app. Escribe uno por línea; añade “, jefatura” para dar permisos de edición.'),
       list.length ? h('div', { class: 'chips col' }, list.map((a) => h('span', { class: 'chip rm' }, a.id, a.role === 'admin' ? h('span', { class: 'role-tag hl' }, 'jefatura') : null,
+        h('button', { class: 'btn ghost sm', title: 'Crea o restablece su contraseña', onclick: (ev) => gen([a.id], ev.currentTarget) }, 'Contraseña'),
         a.id === window.accessApi.me() ? null : h('button', { class: 'x', 'aria-label': 'Quitar a ' + a.id, onclick: () => window.accessApi.remove(a.id) }, '×')))) : h('p', { class: 'muted small' }, 'Todavía no hay nadie más.'),
+      teachersOnly.length ? h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: (ev) => { const b = ev.currentTarget; if (b.dataset.armed) { b.dataset.armed = ''; b.textContent = 'Generar contraseñas para todo el profesorado'; gen(teachersOnly, b); return; } b.dataset.armed = '1'; b.textContent = 'Pulsa otra vez: se restablecerán las de todos'; setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Generar contraseñas para todo el profesorado'; }, 4000); } }, 'Generar contraseñas para todo el profesorado')) : null,
+      res,
       ta, h('div', { class: 'row-end' }, h('button', { class: 'btn primary', onclick: async () => { const n = await window.accessApi.add(ta.value); ta.value = ''; toast(n + ' correo' + (n === 1 ? '' : 's') + ' añadido' + (n === 1 ? '' : 's')); } }, icon('plus'), 'Añadir')));
   },
   render() {
