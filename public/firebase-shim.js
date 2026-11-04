@@ -75,12 +75,32 @@
     if (!auth.isSignInWithEmailLink(location.href)) return Promise.resolve();
     var email = null;
     try { email = localStorage.getItem(LS_EMAIL); } catch (e) {}
-    if (!email) email = (window.prompt('Escribe el correo al que llegó el enlace') || '').trim().toLowerCase();
-    if (!email) return Promise.resolve();
-    return auth.signInWithEmailLink(email, location.href).then(function () {
-      try { localStorage.removeItem(LS_EMAIL); } catch (e) {}
-      history.replaceState(null, '', location.origin + '/');
-    }).catch(function () { history.replaceState(null, '', location.origin + '/'); showLogin('El enlace ha caducado o ya se usó. Pide uno nuevo.'); });
+    var link = location.href;
+    function clean() { history.replaceState(null, '', location.origin + '/'); }
+    function attempt(mail) {
+      return auth.signInWithEmailLink(mail, link).then(function () {
+        try { localStorage.removeItem(LS_EMAIL); } catch (e) {}
+        clean();
+      }).catch(function (e) {
+        clean();
+        var bad = e && e.code === 'auth/invalid-email';
+        showLogin(bad ? 'Ese correo no coincide con el del enlace. Pide un enlace nuevo con el mismo correo.' : 'El enlace ha caducado o ya se usó. Pide uno nuevo y ábrelo directamente (algunos correos lo abren antes de tiempo).');
+      });
+    }
+    if (email) return attempt(email);
+    // Abierto en otro navegador: pedimos el correo en pantalla (sin ventanas emergentes).
+    return new Promise(function (resolve) {
+      var o = ui('<h1 style="font-size:1.25rem;text-align:center;margin:0 0 8px">Confirma tu correo</h1>' +
+        '<p style="text-align:center;margin:0 0 12px">Escribe el correo al que te llegó el enlace.</p>' +
+        '<input id="cf-mail" type="email" autocomplete="email" inputmode="email" aria-label="Tu correo" style="width:100%;box-sizing:border-box;min-height:48px;font:inherit;padding:0 12px;border-radius:12px;border:1px solid rgba(0,0,0,.3)">' +
+        '<button id="cf-go" style="' + primary + '">Entrar</button>');
+      o.querySelector('#cf-go').onclick = function () {
+        var m = (o.querySelector('#cf-mail').value || '').trim().toLowerCase();
+        if (!m) return;
+        o.querySelector('#cf-go').disabled = true;
+        attempt(m).then(resolve);
+      };
+    });
   }
 
   /* ---------- estado de sesión ---------- */
