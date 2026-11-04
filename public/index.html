@@ -1853,7 +1853,7 @@ const Centro = {
     const gen = async (emails, btn) => {
       if (btn) btn.disabled = true;
       try { showPw(await window.accessApi.passwords(emails)); }
-      catch (e) { toast('No se pudieron crear. Comprueba que la clave del servidor está en Vercel.', true); }
+      catch (e) { const m = String((e && e.message) || ''); toast('No se pudieron crear' + (m ? ' (' + m + ')' : '') + '. ' + (/404/.test(m) ? 'La función no está publicada en Vercel.' : /403/.test(m) ? 'Tu cuenta no es de jefatura.' : /500/.test(m) ? 'Revisa la clave del servidor en Vercel.' : ''), true); }
       if (btn) btn.disabled = false;
     };
     const teachersOnly = list.filter((a) => a.role !== 'admin').map((a) => a.id);

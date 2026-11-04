@@ -207,7 +207,10 @@
     passwords: function (emails) {
       return auth.currentUser.getIdToken().then(function (t) {
         return fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ emails: emails }) });
-      }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); }).then(function (j) { return j.users || []; });
+      }).then(function (r) {
+        if (r.ok) return r.json();
+        return r.json().catch(function () { return {}; }).then(function (j) { throw new Error('HTTP ' + r.status + (j.detail ? ' · ' + j.detail : j.error ? ' · ' + j.error : '')); });
+      }).then(function (j) { return j.users || []; });
     }
   };
 })();

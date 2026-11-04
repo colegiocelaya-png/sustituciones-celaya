@@ -4,9 +4,17 @@ const admin = require('firebase-admin');
 
 function init() {
   if (admin.apps.length) return;
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!raw) throw new Error('Falta la variable FIREBASE_SERVICE_ACCOUNT');
-  admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
+  let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw) throw Object.assign(new Error('Falta la variable FIREBASE_SERVICE_ACCOUNT en Vercel'), { code: 'sin-clave' });
+  raw = raw.trim().replace(/^["']|["']$/g, '').trim();
+  if (!raw.startsWith('{')) {
+    // por si se pegó codificada en base64
+    try { raw = Buffer.from(raw, 'base64').toString('utf8').trim(); } catch (e) {}
+  }
+  let cred;
+  try { cred = JSON.parse(raw); } catch (e) { throw Object.assign(new Error('La clave de Vercel no es un JSON válido (pega el archivo entero)'), { code: 'clave-invalida' }); }
+  if (cred.private_key) cred.private_key = cred.private_key.replace(/\\n/g, '\n');
+  admin.initializeApp({ credential: admin.credential.cert(cred) });
 }
 
 module.exports = async (req, res) => {
@@ -47,6 +55,6 @@ module.exports = async (req, res) => {
     return res.status(200).json({ sent, removed });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'server' });
+    return res.status(500).json({ error: 'server', detail: String((e && (e.code || e.message)) || e).slice(0, 200) });
   }
 };
