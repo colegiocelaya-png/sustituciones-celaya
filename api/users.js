@@ -6,7 +6,7 @@ function init() {
   if (!admin) admin = require('firebase-admin'); // se carga aquí para poder explicar el error si falta
   if (admin.apps.length) return;
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!raw) throw Object.assign(new Error('Falta la variable FIREBASE_SERVICE_ACCOUNT en Vercel'), { code: 'sin-clave' });
+  if (!raw) { const vistas = Object.keys(process.env).filter((k) => /FIREBASE|SERVICE|ACCOUNT|GOOGLE/i.test(k)).join(',') || 'ninguna'; throw Object.assign(new Error('x'), { code: 'sin-clave · variables vistas: ' + vistas + ' · entorno: ' + (process.env.VERCEL_ENV || '?') }); }
   raw = raw.trim().replace(/^["']|["']$/g, '').trim();
   if (!raw.startsWith('{')) {
     // por si se pegó codificada en base64
