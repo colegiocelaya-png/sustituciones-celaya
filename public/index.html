@@ -846,6 +846,8 @@ async function saveDay(date, next, old) {
     if (o && o.subId && o.subId !== s.subId) out.push(mk(o, o.subId, 'cancela', old));
   }
   for (const [k, o] of oldMap) if (!nextMap.has(k) && o.subId) out.push(mk(o, o.subId, 'cancela', old));
+  // la marca de huelga es privada de jefatura: no se guarda en el documento que lee el profesorado
+  next.subs = next.subs.map((x) => { const y = { ...x }; delete y.strike; return y; });
   S.days[date] = next;
   renderAll();
   await S.db.doc('days/' + date).set(next);
