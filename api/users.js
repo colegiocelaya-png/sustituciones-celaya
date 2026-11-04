@@ -1,8 +1,9 @@
 /* Función de Vercel: crea o restablece cuentas con contraseña (solo jefatura).
    Las cuentas se crean con el correo ya verificado, así no hace falta que llegue ningún correo. */
-const admin = require('firebase-admin');
+let admin = null;
 
 function init() {
+  if (!admin) admin = require('firebase-admin'); // se carga aquí para poder explicar el error si falta
   if (admin.apps.length) return;
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) throw Object.assign(new Error('Falta la variable FIREBASE_SERVICE_ACCOUNT en Vercel'), { code: 'sin-clave' });

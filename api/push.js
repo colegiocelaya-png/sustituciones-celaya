@@ -1,8 +1,9 @@
 /* Función de Vercel: envía las notificaciones push.
    Solo la puede llamar una persona con sesión iniciada y con rol "admin" (jefatura). */
-const admin = require('firebase-admin');
+let admin = null;
 
 function init() {
+  if (!admin) admin = require('firebase-admin'); // se carga aquí para poder explicar el error si falta
   if (admin.apps.length) return;
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) throw Object.assign(new Error('Falta la variable FIREBASE_SERVICE_ACCOUNT en Vercel'), { code: 'sin-clave' });
