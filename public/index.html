@@ -450,7 +450,7 @@ function needsFor(day, wd, teachers, patio, strike) {
       } else {
         const c = cellOf(T, wd, s);
         if (c && c.t === 'c' && !isSpecial(T.role)) {
-          out.push({ key: a.id + '_' + s, absId: a.id, absentId: T.id, slot: s, place: c.g || ('Clase de ' + T.name), strike: strike.includes(a.id) });
+          out.push({ key: a.id + '_' + s, absId: a.id, absentId: T.id, slot: s, place: c.g || ('Clase de ' + T.name), subject: c.m || '', strike: strike.includes(a.id) });
         }
       }
     }
@@ -714,9 +714,6 @@ function buildExample() {
   return { teachers, turns, turnsInf };
 }
 
-if (typeof module !== 'undefined') {
-  
-}
 /* ===== Interfaz ===== */
 (() => { const ap = Element.prototype.append; Element.prototype.append = function (...a) { return ap.apply(this, a.flat(Infinity).filter((x) => x != null && x !== false)); }; })();
 function h(tag, props, ...kids) {
@@ -814,8 +811,9 @@ function savePatio(month, mut) {
     await S.db.doc('patios/' + month).set(cur);
   });
 }
+const placeTxt = (s) => (s.place || '') + (s.subject ? ' · ' + s.subject : '');
 function notifText(date, s, kind, nota) {
-  const place = s.place || '';
+  const place = placeTxt(s);
   if (kind === 'cancela') {
     return 'Ya no tienes que sustituir a ' + tName(s.absentId) + ' el ' + fmtShort(date) + ' en ' + slotLabel(s.slot).toLowerCase() + '.';
   }
@@ -1229,7 +1227,7 @@ const Hoy = {
           h('div', { class: 'tl-body' }, subs.length ? subs.map((x) => h('div', { class: 'tl-item' },
             h('span', { class: 'tl-abs' }, avatar(x.absentId, 'sm'), tName(x.absentId)), h('span', { class: 'tl-arrow', 'aria-hidden': 'true' }, icon('chevr')),
             x.subId ? h('b', { class: 'tl-sub' }, avatar(x.subId, 'sm'), tName(x.subId)) : h('b', { class: 'tl-sub bad' }, 'Sin cubrir'),
-            h('span', { class: 'muted small' }, x.place), x.subId ? tierPill(x) : null)) : h('span', { class: 'muted small' }, 'Sin sustituciones'))));
+            h('span', { class: 'muted small' }, placeTxt(x)), x.subId ? tierPill(x) : null)) : h('span', { class: 'muted small' }, 'Sin sustituciones'))));
       }
       this.timeline.append(tl);
     }
@@ -1272,7 +1270,7 @@ const Hoy = {
           return h('div', { class: 'row sub' },
             h('div', { class: 'grow' },
               h('div', null, 'Cubre a ', h('b', null, tName(s.absentId))),
-              h('div', { class: 'muted small' }, 'Lugar: ' + s.place)),
+              h('div', { class: 'muted small' }, 'Lugar: ' + placeTxt(s))),
             h('div', { class: 'sub-pick' },
               this.subSelect(s, date, wd),
               h('div', { class: 'meta' }, tierPill(s), s.fb ? h('span', { class: 'small muted', title: 'No había nadie en el nivel que marca el criterio; se ha usado otro.' }, 'criterio ampliado') : null, s.manual ? h('span', { class: 'small muted' }, 'manual') : null,
@@ -1425,7 +1423,7 @@ const Mis = {
       h('div', { class: 'aviso-body' },
         h('div', { class: 'aviso-when' }, icon(cancel ? 'x' : 'bell'), rel, h('span', { class: 'muted' }, ' · ' + timeAgo(n.ts))),
         h('h4', null, cancel ? 'Ya no tienes que sustituir a ' : 'Sustituyes a ', h('b', null, tName(n.absentId))),
-        !cancel && sub && sub.place ? h('div', { class: 'aviso-place' }, icon('home'), sub.place) : null,
+        !cancel && sub && sub.place ? h('div', { class: 'aviso-place' }, icon('home'), placeTxt(sub)) : null,
         !cancel && ab && ab.nota ? h('div', { class: 'small muted' }, 'Nota: ' + ab.nota) : null),
       h('button', { class: 'btn ' + (cancel ? 'ghost' : 'primary') + ' sm', onclick: () => this.read(n) }, icon('check'), 'Entendido'));
   },
@@ -1433,7 +1431,7 @@ const Mis = {
     return h('div', { class: 'row sub' + (quiet ? ' quiet' : '') },
       h('div', { class: 'time-col' }, h('b', { class: 'tc-big' }, sessTime(m.slot).split('–')[0]), h('span', { class: 'time' }, (m.slot === 'R' ? 'Recreo' : m.slot + 'ª hora'))),
       h('div', { class: 'grow' }, h('div', null, 'Sustituyes a ', h('b', null, tName(m.absentId))),
-        h('div', null, 'Lugar: ', h('b', null, m.place)), m.nota ? h('div', { class: 'small muted' }, 'Nota: ' + m.nota) : null),
+        h('div', null, 'Lugar: ', h('b', null, placeTxt(m))), m.nota ? h('div', { class: 'small muted' }, 'Nota: ' + m.nota) : null),
       quiet ? h('span', { class: 'muted small' }, fmtShort(m.date)) : null);
   },
   read(n) { if (S.canWrite === false) return; S.db.doc('notifs/' + n.id).update({ read: true }).catch(() => toast('No se pudo marcar como visto.', true)); },
