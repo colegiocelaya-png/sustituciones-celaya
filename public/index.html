@@ -237,6 +237,15 @@ textarea { width: 100%; resize: vertical; }
 .tc-big { font: 700 1.15rem var(--font-d); font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .aviso { grid-template-columns: auto 1fr; } .aviso > .btn { grid-column: 1 / -1; width: 100%; } }
 .pwlist{white-space:pre-wrap;word-break:break-all;background:var(--bg,#FBEFED);border-radius:10px;padding:10px;font:600 .95rem ui-monospace,Menlo,Consolas,monospace;user-select:all;margin:8px 0}.card.inner{box-shadow:none;border:1px solid rgba(0,0,0,.15);margin:10px 0}
+#pwprint { display: none; }
+@media print {
+  body.print-pw > *:not(#pwprint) { display: none !important; }
+  body.print-pw #pwprint { display: block; color: #000; background: #fff; }
+  #pwprint h1 { font-size: 18px; margin: 0 0 4px; } #pwprint p { margin: 0 0 12px; font-size: 12px; }
+  #pwprint .slips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #pwprint .slip { border: 1.5px dashed #555; border-radius: 6px; padding: 10px 12px; font-size: 12px; line-height: 1.7; break-inside: avoid; }
+  #pwprint .slip b { font-weight: 700; } #pwprint .pw { font: 700 16px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; }
+}
 </style>
 
 <style>
@@ -1108,6 +1117,23 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.more) 
 function doPrint() {
   try { window.print(); } catch (e) { toast('No se pudo abrir la impresión. Usa Ctrl+P o el menú Compartir/Imprimir del navegador.', true); }
 }
+function printPw(users) {
+  const ok = users.filter((u) => u.password);
+  if (!ok.length) return toast('No hay contraseñas que imprimir.', true);
+  const url = location.origin;
+  const box = h('div', { id: 'pwprint' },
+    h('h1', null, 'Sustituciones · CEIP Gabriel Celaya'),
+    h('p', null, 'Tarjetas de acceso. Recorta cada una y entrégala a su destinatario. No compartas tu contraseña.'),
+    h('div', { class: 'slips' }, ok.map((u) => h('div', { class: 'slip' },
+      h('b', null, 'Acceso a la app de sustituciones'),
+      h('div', null, 'Dirección: ', h('b', null, url.replace(/^https?:\/\//, ''))),
+      h('div', null, 'Correo: ', h('b', null, u.email)),
+      h('div', null, 'Contraseña: ', h('b', { class: 'pw' }, u.password))))));
+  document.body.append(box); document.body.classList.add('print-pw');
+  const done = () => { document.body.classList.remove('print-pw'); box.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(doPrint, 50);
+}
 const printBtn = (label) => h('button', { class: 'btn ghost no-print', onclick: doPrint }, icon('print'), label || 'Imprimir');
 window.addEventListener('beforeprint', () => { const f = document.getElementById('pfoot'); if (f) f.textContent = 'CEIP Gabriel Celaya · Impreso el ' + new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }); });
 function empty(title, body, action, ico) {
@@ -1805,7 +1831,7 @@ const Centro = {
       res.append(h('div', { class: 'card inner' }, h('b', null, 'Contraseñas nuevas'),
         h('p', { class: 'muted small' }, 'Cópialas ahora y entrégalas a cada persona: no se pueden volver a ver (puedes generar otra cuando quieras).'),
         h('pre', { class: 'pwlist' }, text),
-        h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('Copiadas'); } catch (e) { toast('Selecciona el texto y cópialo a mano.', true); } } }, 'Copiar'))));
+        h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: () => printPw(users) }, icon('print'), 'Imprimir / PDF'), h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('Copiadas'); } catch (e) { toast('Selecciona el texto y cópialo a mano.', true); } } }, 'Copiar'))));
     };
     showPw(S.pwRes || []);
     const gen = async (emails, btn) => {
