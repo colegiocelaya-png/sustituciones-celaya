@@ -516,9 +516,7 @@ function assign(day, date, ctx, resetAll) {
       if (onPatio(ctx.patio, wd, T.id)) return false;
       if (tier === 1) return isPrim(T);
       if (tier === 3) return isSpecial(T.role);
-      if (tier === 4) return T.role === 'directivo' && (dirToday[T.id] || 0) < ctx.maxDir;
-      if (tier === 9) return T.role === 'directivo';
-      return false;
+      return false; // el equipo directivo no cubre patio
     }
     if (tier === 1) return isPrim(T) && t === 'l';
     if (tier === 2) return isPrim(T) && t === 'a';
@@ -544,6 +542,7 @@ function assign(day, date, ctx, resetAll) {
           if (n.slot === 'R' && onPatio(ctx.patio, wd, T.id)) return false;
           const c = cellOf(T, wd, n.slot), t = n.slot === 'R' ? 'l' : (c ? c.t : 'n');
           if (t === 'n') return false;
+          if (n.slot === 'R' && kind.startsWith('dir')) return false; // el equipo directivo no cubre patio
           if (kind === 'apoyoinf') return T.role === 'apoyoinf';
           if (kind === 'pt') return isSpecial(T.role);
           return T.role === 'directivo' && !!T.cubreInf && (kind === 'dir9' || (dirToday[T.id] || 0) < ctx.maxDir);
@@ -1814,7 +1813,7 @@ const Centro = {
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
-        h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
+        h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. El equipo directivo no cubre el patio. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
       h('p', { class: 'muted small' }, 'Huelga: cuando una ausencia se marca como huelga, solo la pueden cubrir los profesores marcados como servicios mínimos ese día, con el mismo orden de criterios. El motivo solo lo ves tú.'),
       h('p', { class: 'muted small' }, 'Si en ninguno de los niveles permitidos queda nadie, el equipo directivo la cubre siempre, aunque supere el máximo diario (se marca como “criterio ampliado”). Entre el resto, elige a quien menos ha sustituido en el pasado en proporción a sus huecos y apoyos semanales, así el profesorado de primaria, que tiene más, sustituye más de forma natural y los especialistas (inglés, música, educación física) no quedan cargados. Los recreos se cubren con quien no tenga turno de patio ese día.')));
     // ajustes
