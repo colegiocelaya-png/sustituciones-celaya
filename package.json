@@ -1,0 +1,9 @@
+{
+  "name": "sustituciones-celaya",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gestión de sustituciones CEIP Gabriel Celaya",
+  "scripts": { "seed": "node seed.js" },
+  "dependencies": { "firebase-admin": "^12.1.0" },
+  "engines": { "node": ">=18" }
+}

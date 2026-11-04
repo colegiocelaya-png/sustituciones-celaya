@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function email() { return request.auth.token.email.lower(); }
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isAllowed() { return signedIn() && exists(/databases/$(database)/documents/access/$(email())); }
+    function isAdmin() { return isAllowed() && get(/databases/$(database)/documents/access/$(email())).data.role == 'admin'; }
+
+    // Lista de correos autorizados: cada persona puede leer su propia ficha; la jefatura, todas.
+    match /access/{mail} {
+      allow get: if signedIn() && (mail == email() || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /school/{d}  { allow read: if isAllowed(); allow write: if isAdmin(); }
+    match /days/{d}    { allow read: if isAllowed(); allow write: if isAdmin(); }
+    match /patios/{d}  { allow read: if isAllowed(); allow write: if isAdmin(); }
+    match /sm/{d}      { allow read: if isAllowed(); allow write: if isAdmin(); }
+    match /private/{d} { allow read, write: if isAdmin(); }
+
+    // Avisos dentro de la app: crea la jefatura; el profesorado solo puede marcarlos como vistos.
+    match /notifs/{d} {
+      allow read: if isAllowed();
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || (isAllowed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+    }
+
+    // Chat de cada día
+    match /chats/{date}/msgs/{m} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    match /chats/{date}/seen/{s} { allow read, write: if isAllowed(); }
+
+    // Dispositivos para notificaciones
+    match /tokens/{t} {
+      allow create, update: if isAllowed() && request.resource.data.uid == request.auth.uid;
+      allow read, delete: if isAllowed() && resource.data.uid == request.auth.uid;
+    }
+
+    // Perfil de cada persona (qué profesor/a es)
+    match /data/users/{uid}/{docId} {
+      allow read, write: if isAllowed() && request.auth.uid == uid;
+    }
+  }
+}
