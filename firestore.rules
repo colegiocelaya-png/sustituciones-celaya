@@ -4,6 +4,7 @@ service cloud.firestore {
     function email() { return request.auth.token.email.lower(); }
     function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function isAllowed() { return signedIn() && exists(/databases/$(database)/documents/access/$(email())); }
+    function myTid() { return get(/databases/$(database)/documents/access/$(email())).data.get('tid', ''); }
     function isAdmin() { return isAllowed() && get(/databases/$(database)/documents/access/$(email())).data.role == 'admin'; }
 
     // Lista de correos autorizados: cada persona puede leer su propia ficha; la jefatura, todas.
@@ -21,23 +22,24 @@ service cloud.firestore {
 
     // Avisos dentro de la app: crea la jefatura; el profesorado solo puede marcarlos como vistos.
     match /notifs/{d} {
-      allow read: if isAllowed();
+      allow read: if isAdmin() || (isAllowed() && resource.data.to == myTid());
       allow create: if isAdmin();
       allow delete: if isAdmin();
-      allow update: if isAdmin() || (isAllowed() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      allow update: if isAdmin() || (isAllowed() && resource.data.to == myTid() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
     }
 
     // Chat de cada día
     match /chats/{date}/msgs/{m} {
       allow read: if isAllowed();
-      allow create: if isAllowed() && request.resource.data.uid == request.auth.uid;
+      allow create: if isAllowed() && request.resource.data.uid == request.auth.uid
+        && (isAdmin() || (request.resource.data.tid == myTid() && request.resource.data.jefe == false));
       allow delete: if isAdmin();
     }
-    match /chats/{date}/seen/{s} { allow read, write: if isAllowed(); }
+    match /chats/{date}/seen/{s} { allow read: if isAllowed(); allow write: if isAdmin() || (isAllowed() && s == myTid()); }
 
     // Dispositivos para notificaciones
     match /tokens/{t} {
-      allow create, update: if isAllowed() && request.resource.data.uid == request.auth.uid;
+      allow create, update: if isAllowed() && request.resource.data.uid == request.auth.uid && (isAdmin() || request.resource.data.tid == myTid());
       allow read, delete: if isAllowed() && resource.data.uid == request.auth.uid;
     }
 

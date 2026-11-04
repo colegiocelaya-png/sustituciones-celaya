@@ -113,7 +113,7 @@
         var email = (u.email || '').toLowerCase();
         fs.doc('access/' + email).get().then(function (snap) {
           if (!snap.exists) return showDenied(email);
-          ctx = { uid: u.uid, email: email, role: snap.data().role === 'admin' ? 'admin' : 'teacher' };
+          ctx = { uid: u.uid, email: email, role: snap.data().role === 'admin' ? 'admin' : 'teacher', tid: snap.data().tid || null };
           started = true; hide(); readyResolve(ctx);
         }).catch(function () { showDenied(email); });
       });
@@ -127,7 +127,8 @@
         if (name === 'user') return {
           id: function () { return Promise.resolve(c.uid); },
           canEdit: function () { return Promise.resolve(c.role === 'admin'); },
-          can: function () { return Promise.resolve(true); }
+          can: function () { return Promise.resolve(true); },
+          tid: function () { return Promise.resolve(c.tid); }
         };
         return null;
       });
@@ -183,7 +184,7 @@
     me: function () { return ctx && ctx.email; },
     subscribe: function (cb) {
       return fs.collection('access').onSnapshot(function (s) {
-        cb(s.docs.map(function (d) { return { id: d.id, role: d.data().role }; }));
+        cb(s.docs.map(function (d) { return { id: d.id, role: d.data().role, tid: d.data().tid || null }; }));
       }, function () {});
     },
     add: function (text) {
@@ -200,6 +201,8 @@
       return Promise.all(jobs).then(function () { return jobs.length; });
     },
     remove: function (email) { return fs.doc('access/' + email).delete(); },
+    // Liga un correo a un profesor/a concreto (cada persona solo ve sus propios avisos)
+    setTid: function (email, tid) { return fs.doc('access/' + email).set({ tid: tid || null }, { merge: true }); },
     // Crea o restablece cuentas con contraseña (la jefatura se las da a cada profesor)
     passwords: function (emails) {
       return auth.currentUser.getIdToken().then(function (t) {

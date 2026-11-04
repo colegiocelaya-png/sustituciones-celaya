@@ -247,6 +247,7 @@ textarea { width: 100%; resize: vertical; }
   #pwprint .slip { position: relative; padding-right: 92px; min-height: 84px; } #pwprint .qr { position: absolute; right: 8px; top: 8px; width: 78px; height: 78px; image-rendering: pixelated; }
   #pwprint .slip b { font-weight: 700; } #pwprint .pw { font: 700 16px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; }
 }
+.tidsel{max-width:11rem;min-height:36px;font:inherit;border-radius:8px}
 </style>
 
 <style>
@@ -1390,6 +1391,9 @@ const Mis = {
     const el = this.el; el.textContent = '';
     if (!S.loaded.school) return el.append(skeleton());
     if (!S.school.teachers.length) return el.append(empty('Todavía no hay profesorado cargado', S.admin ? 'Importa los horarios en la pestaña Profesorado.' : 'La jefatura de estudios está preparando los horarios.', null, 'users'));
+    if (S.locked && (!S.me || !tById(S.me))) {
+      return el.append(empty('Tu cuenta aún no está ligada a tu ficha', 'Pide a la jefatura de estudios que asigne tu correo a tu nombre (Centro → Quién puede entrar). Cuando lo haga, recarga esta página.', null, 'lock'));
+    }
     if (!S.me || !tById(S.me)) {
       const sel = h('select', { id: 'yo' }, h('option', { value: '' }, '— Elige tu nombre —'), sortedTeachers().map((t) => h('option', { value: t.id }, t.name)));
       return el.append(h('div', { class: 'card narrow' }, h('h2', null, '¿Quién eres?'),
@@ -1399,7 +1403,7 @@ const Mis = {
     }
     const me = tById(S.me), today = todayStr();
     el.append(h('div', { class: 'card-head' }, h('h2', null, 'Hola, ' + me.name.split(' ')[0]),
-      h('button', { class: 'btn ghost sm', onclick: () => setMe(null) }, 'No soy yo')));
+      S.locked || S.myTid ? null : h('button', { class: 'btn ghost sm', onclick: () => setMe(null) }, 'No soy yo')));
     if (window.pushApi) el.append(this.pushCard(me));
     // avisos
     const unread = S.notifs.filter((n) => !n.read);
@@ -1846,8 +1850,10 @@ const Centro = {
     };
     const teachersOnly = list.filter((a) => a.role !== 'admin').map((a) => a.id);
     return h('div', { class: 'card' }, h('h3', null, 'Quién puede entrar'),
-      h('p', { class: 'muted small' }, 'Solo estos correos pueden abrir la app. Escribe uno por línea; añade “, jefatura” para dar permisos de edición.'),
+      h('p', { class: 'muted small' }, 'Solo estos correos pueden abrir la app. Escribe uno por línea; añade “, jefatura” para dar permisos de edición. Asigna a cada correo su nombre: así cada profesor solo ve sus avisos.'),
       list.length ? h('div', { class: 'chips col' }, list.map((a) => h('span', { class: 'chip rm' }, a.id, a.role === 'admin' ? h('span', { class: 'role-tag hl' }, 'jefatura') : null,
+        h('select', { class: 'tidsel', 'aria-label': 'Profesor/a de ' + a.id, onchange: (ev) => window.accessApi.setTid(a.id, ev.target.value).then(() => toast('Asignado'), () => toast('No se pudo asignar.', true)) },
+          h('option', { value: '' }, '— sin asignar —'), sortedTeachers().map((t) => h('option', { value: t.id, selected: t.id === a.tid }, t.name))),
         h('button', { class: 'btn ghost sm', title: 'Crea o restablece su contraseña', onclick: (ev) => gen([a.id], ev.currentTarget) }, 'Contraseña'),
         a.id === window.accessApi.me() ? null : h('button', { class: 'x', 'aria-label': 'Quitar a ' + a.id, onclick: () => window.accessApi.remove(a.id) }, '×')))) : h('p', { class: 'muted small' }, 'Todavía no hay nadie más.'),
       teachersOnly.length ? h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: (ev) => { const b = ev.currentTarget; if (b.dataset.armed) { b.dataset.armed = ''; b.textContent = 'Generar contraseñas para todo el profesorado'; gen(teachersOnly, b); return; } b.dataset.armed = '1'; b.textContent = 'Pulsa otra vez: se restablecerán las de todos'; setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Generar contraseñas para todo el profesorado'; }, 4000); } }, 'Generar contraseñas para todo el profesorado')) : null,
@@ -1930,7 +1936,11 @@ async function boot() {
   S.uid = S.user ? await S.user.id() : null;
   S.admin = S.user ? await S.user.canEdit() : false;
   S.canWrite = S.user ? await S.user.can('data.write') : null;
-  try { S.me = localStorage.getItem(LS_ME) || null; } catch (e) {}
+  S.myTid = S.user && S.user.tid ? await S.user.tid() : null;
+  // con cuentas propias (Firebase), el profesorado queda ligado a su ficha y no puede elegir otra
+  S.locked = !!window.accessApi && !S.admin;
+  if (S.locked || S.myTid) S.me = S.myTid || null;
+  else { try { S.me = localStorage.getItem(LS_ME) || null; } catch (e) {} }
   renderAll();
 
   const timer = setTimeout(() => { if (!S.loaded.school) toast('Los datos tardan en llegar. Comprueba tu conexión.', true); }, 10000);
@@ -1962,7 +1972,7 @@ async function boot() {
   }
   if (S.uid) {
     S.db.doc('data/users/' + S.uid + '/profile').onSnapshot((snap) => {
-      if (snap.exists && snap.data().tid && snap.data().tid !== S.me) { S.me = snap.data().tid; subscribeNotifs(); renderAll(); }
+      if (!S.locked && !S.myTid && snap.exists && snap.data().tid && snap.data().tid !== S.me) { S.me = snap.data().tid; subscribeNotifs(); renderAll(); }
     }, () => {});
   }
   if (window.accessApi && S.admin) window.accessApi.subscribe((l) => { S.access = l; if (views.centro.built) refresh(views.centro); });
