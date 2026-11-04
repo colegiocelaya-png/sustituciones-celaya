@@ -244,6 +244,7 @@ textarea { width: 100%; resize: vertical; }
   #pwprint h1 { font-size: 18px; margin: 0 0 4px; } #pwprint p { margin: 0 0 12px; font-size: 12px; }
   #pwprint .slips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   #pwprint .slip { border: 1.5px dashed #555; border-radius: 6px; padding: 10px 12px; font-size: 12px; line-height: 1.7; break-inside: avoid; }
+  #pwprint .slip { position: relative; padding-right: 92px; min-height: 84px; } #pwprint .qr { position: absolute; right: 8px; top: 8px; width: 78px; height: 78px; image-rendering: pixelated; }
   #pwprint .slip b { font-weight: 700; } #pwprint .pw { font: 700 16px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; }
 }
 </style>
@@ -1125,6 +1126,7 @@ function printPw(users) {
     h('h1', null, 'Sustituciones · CEIP Gabriel Celaya'),
     h('p', null, 'Tarjetas de acceso. Recorta cada una y entrégala a su destinatario. No compartas tu contraseña.'),
     h('div', { class: 'slips' }, ok.map((u) => h('div', { class: 'slip' },
+      h('img', { src: '/qr.png', alt: 'QR de acceso a la app', class: 'qr' }),
       h('b', null, 'Acceso a la app de sustituciones'),
       h('div', null, 'Dirección: ', h('b', null, url.replace(/^https?:\/\//, ''))),
       h('div', null, 'Correo: ', h('b', null, u.email)),
