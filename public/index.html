@@ -566,9 +566,12 @@ function assign(day, date, ctx, resetAll) {
       continue;
     }
     const absentNow = (day.absences || []).filter((a) => a.slots.includes(n.slot) && roleOf(a.tid) !== 'infantil').length;
-    const start = n.slot === 'R' ? 1 : absentNow <= 1 ? 1 : absentNow === 2 ? 2 : 3;
-    // Preferencia entre fuentes: libre, coordinación, apoyo, speaking, PT/AL; el equipo directivo siempre al final.
-    const order = [start, ...[1, 6, 2, 7, 3].filter((t) => t !== start), 4];
+    const start = 1;
+    // Fuentes permitidas según cuántos profesores faltan a la vez (en este orden):
+    //  1 ausente: libre, coordinación, directivo (no se quitan apoyos)
+    //  2 ausentes: libre, coordinación, apoyo (y speaking), directivo
+    //  3 o más: libre, coordinación, apoyo (y speaking), PT/AL, directivo
+    const order = absentNow <= 1 ? [1, 6, 4] : absentNow === 2 ? [1, 6, 2, 7, 4] : [1, 6, 2, 7, 3, 4];
     let picked = null, pickedTier = 0;
     for (const tier of order) {
       const list = candidates(tier, n.slot, n);
@@ -587,7 +590,7 @@ function assign(day, date, ctx, resetAll) {
     if (picked) {
       mark(n.slot, picked.id);
       if (picked.role === 'directivo') dirToday[picked.id] = (dirToday[picked.id] || 0) + 1;
-      out.push({ ...n, subId: picked.id, tier: pickedTier, fb: pickedTier !== start, manual: false });
+      out.push({ ...n, subId: picked.id, tier: pickedTier, fb: false, manual: false });
     } else {
       out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
     }
@@ -1262,7 +1265,7 @@ const Hoy = {
       if (!subs.length) continue;
       const n = day.absences.filter((a) => a.slots.includes(slot)).length;
       const infN = day.absences.filter((x) => x.slots.includes(slot) && (tById(x.tid) || {}).role === 'infantil').length;
-      const crit = (infN ? (infN >= 2 ? 'Infantil: PT y AL' : 'Infantil: apoyo de infantil') + ' · ' : '') + (slot === 'R' ? 'Recreo: hora libre primero' : n <= 1 ? 'Criterio: hora libre' : n === 2 ? 'Criterio: apoyos' : 'Criterio: PT y AL');
+      const crit = (infN ? (infN >= 2 ? 'Infantil: PT y AL' : 'Infantil: apoyo de infantil') + ' · ' : '') + (n <= 1 ? 'Criterio: libres, coordinación, directivo' : n === 2 ? 'Criterio: libres, coordinación, apoyos, directivo' : 'Criterio: libres, coordinación, apoyos, PT/AL, directivo');
       this.subWrap.append(h('div', { class: 'slot-group' },
         h('div', { class: 'slot-head' }, h('b', null, slotLabel(slot)), h('span', { class: 'time' }, sessTime(slot)), h('span', { class: 'muted small' }, n + ' ausente' + (n === 1 ? '' : 's') + ' · ' + crit)),
         subs.map((s) => {
@@ -1803,15 +1806,15 @@ const Centro = {
     el.append(h('h2', { class: 'cap' }, 'Centro'));
     // criterio
     el.append(h('div', { class: 'card' }, h('h3', null, 'Cómo reparte la app las sustituciones'),
-      h('p', { class: 'muted small' }, 'Orden de preferencia entre las fuentes: 1.º hora libre, 2.º coordinación, 3.º apoyo, 4.º speaking. Además, en cada franja se cuenta cuántos profesores faltan a la vez y se elige a quién cubre:'),
+      h('p', { class: 'muted small' }, 'En cada franja se cuenta cuántos profesores faltan a la vez y se cubre con estas fuentes, en este orden:'),
       h('ol', { class: 'steps' },
-        h('li', null, h('b', null, '1 ausente: '), 'hora libre; si no hay nadie, coordinación (COO), después apoyo y después speaking (SPK).'),
-        h('li', null, h('b', null, '2 ausentes: '), 'profesorado que da apoyo en ese momento; si no hay, hora libre, coordinación y speaking.'),
-        h('li', null, h('b', null, '3 o más: '), 'PT y AL; si no hay, hora libre, coordinación, apoyo y speaking.'),
+        h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
+        h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
+        h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
-        h('li', null, h('b', null, 'Último recurso: '), 'equipo directivo, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
+        h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
       h('p', { class: 'muted small' }, 'Huelga: cuando una ausencia se marca como huelga, solo la pueden cubrir los profesores marcados como servicios mínimos ese día, con el mismo orden de criterios. El motivo solo lo ves tú.'),
-      h('p', { class: 'muted small' }, 'Si en el nivel que toca no queda nadie, la app prueba con los siguientes y lo marca como “criterio ampliado”. Entre el resto, elige a quien menos ha sustituido en el pasado en proporción a sus huecos y apoyos semanales, así el profesorado de primaria, que tiene más, sustituye más de forma natural y los especialistas (inglés, música, educación física) no quedan cargados. Los recreos se cubren con quien no tenga turno de patio ese día.')));
+      h('p', { class: 'muted small' }, 'Si en ninguno de los niveles permitidos queda nadie, la sustitución se queda “sin cubrir” para que la resuelvas a mano. Entre el resto, elige a quien menos ha sustituido en el pasado en proporción a sus huecos y apoyos semanales, así el profesorado de primaria, que tiene más, sustituye más de forma natural y los especialistas (inglés, música, educación física) no quedan cargados. Los recreos se cubren con quien no tenga turno de patio ese día.')));
     // ajustes
     const max = h('input', { type: 'number', id: 'max-dir', min: 0, max: 9, value: S.school.maxDir || 2, onchange: (e) => { const v = Math.max(0, Math.min(9, parseInt(e.target.value, 10) || 0)); saveSchool((s) => { s.maxDir = v; }); } });
     const times = h('div', { class: 'times' }, SLOT_ORDER.map((s) => h('label', { class: 'field' }, h('span', null, slotLabel(s)),
