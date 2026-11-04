@@ -248,6 +248,7 @@ textarea { width: 100%; resize: vertical; }
   #pwprint .slip b { font-weight: 700; } #pwprint .pw { font: 700 16px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; }
 }
 .tidsel{max-width:11rem;min-height:36px;font:inherit;border-radius:8px}
+.chips.col .chip{flex-wrap:wrap;max-width:100%;height:auto;row-gap:6px}.tidsel{max-width:100%}
 </style>
 
 <style>
@@ -787,7 +788,8 @@ const strikeIds = (d) => (S.priv[d] && S.priv[d].huelga) || [];
 const weekStart = (date) => addDays(date, -((toDate(date).getDay() + 6) % 7));
 const smFor = (date) => { const wd = weekdayKey(date); return wd ? (((S.sm[weekStart(date)] || {}).days || {})[wd] || []) : []; };
 const ctxFor = (date) => ({ teachers: S.school.teachers, patio: S.patios[date.slice(0, 7)], days: S.days, maxDir: S.school.maxDir || 2, strike: strikeIds(date), sm: smFor(date) });
-function savePriv(date, ids) { S.priv[date] = { huelga: ids }; return S.db.doc('private/' + date).set({ huelga: ids }); }
+function savePriv(date, ids) { S.priv[date] = { ...(S.priv[date] || {}), huelga: ids }; return S.db.doc('private/' + date).set({ huelga: ids }, { merge: true }); }
+const notasOf = (date) => (S.priv[date] || {}).notas || {};
 
 /* ---------- avisos en pantalla y cola de escrituras ---------- */
 let toastTimer;
@@ -838,9 +840,14 @@ function notifText(date, s, kind, nota) {
 async function saveDay(date, next, old) {
   const oldMap = new Map(((old && old.subs) || []).map((s) => [s.key, s]));
   const nextMap = new Map(next.subs.map((s) => [s.key, s]));
-  const noteOf = (d, s) => { const a = (d.absences || []).find((x) => x.id === s.absId); return a ? a.nota : ''; };
+  // Las notas para el sustituto no se guardan en el documento del día (lo lee todo el profesorado):
+  // van en el espacio privado de jefatura y en el aviso de quien sustituye.
+  const notas = { ...notasOf(date) };
+  let notasCambian = false;
+  for (const a of next.absences || []) { if (a.nota && notas[a.id] !== a.nota) { notas[a.id] = a.nota; notasCambian = true; } delete a.nota; }
+  const noteOf = (d, s) => notas[s.absId] || '';
   const out = [];
-  const mk = (s, to, kind, d) => ({ to, date, slot: s.slot, key: s.key, kind, text: notifText(date, s, kind, kind === 'cancela' ? '' : noteOf(d, s)), ts: Date.now(), read: false, absentId: s.absentId });
+  const mk = (s, to, kind, d) => ({ to, date, slot: s.slot, key: s.key, kind, text: notifText(date, s, kind, kind === 'cancela' ? '' : noteOf(d, s)), nota: kind === 'cancela' ? '' : noteOf(d, s), ts: Date.now(), read: false, absentId: s.absentId });
   for (const [k, s] of nextMap) {
     const o = oldMap.get(k);
     if (s.subId && (!o || o.subId !== s.subId)) out.push(mk(s, s.subId, 'asigna', next));
@@ -851,6 +858,7 @@ async function saveDay(date, next, old) {
   next.subs = next.subs.map((x) => { const y = { ...x }; delete y.strike; return y; });
   S.days[date] = next;
   renderAll();
+  if (notasCambian) { S.priv[date] = { ...(S.priv[date] || {}), notas }; await S.db.doc('private/' + date).set({ notas }, { merge: true }); }
   await S.db.doc('days/' + date).set(next);
   for (const n of out) await S.db.collection('notifs').add(n);
   if (window.pushNotify && out.length) window.pushNotify(out).catch(() => {});
@@ -1283,7 +1291,7 @@ const Hoy = {
           h('div', { class: 'who-line' }, avatar(a.tid), h('b', null, tName(a.tid)), h('span', { class: 'role-tag' }, T ? ROLES[T.role] : ''), isStrike ? h('span', { class: 'pill tier t3' }, 'Huelga') : null),
           h('div', { class: 'muted small' }, full ? 'Todo el día' : a.slots.map((s) => (s === 'R' ? 'Recreo' : s + 'ª')).join(', '),
             needs ? ' · ' + needs + ' franja' + (needs === 1 ? '' : 's') + ' que cubrir' : ' · no necesita sustitución'),
-          a.nota ? h('div', { class: 'small' }, 'Nota: ' + a.nota) : null),
+          notasOf(date)[a.id] ? h('div', { class: 'small' }, 'Nota: ' + notasOf(date)[a.id]) : null),
         h('div', { class: 'row-wrap' }, h('button', { class: 'btn ghost sm', onclick: () => setStrike(date, a.id, !isStrike) }, isStrike ? 'Quitar huelga' : 'Marcar huelga'),
           h('button', { class: 'btn ghost sm', onclick: () => removeAbsence(date, a.id) }, 'Quitar'))));
     }
@@ -1414,7 +1422,7 @@ const Mis = {
     el.append(nCard);
     // próximas
     const mine = [];
-    for (const d in S.days) for (const s of S.days[d].subs || []) if (s.subId === S.me) mine.push({ date: d, ...s, nota: ((S.days[d].absences || []).find((a) => a.id === s.absId) || {}).nota });
+    for (const d in S.days) for (const s of S.days[d].subs || []) if (s.subId === S.me) mine.push({ date: d, ...s, nota: (S.notifs.find((n) => n.date === d && n.key === s.key && n.kind === 'asigna') || {}).nota });
     const slotIdx = (s) => SLOT_ORDER.indexOf(s.slot);
     const up = mine.filter((m) => m.date >= today).sort((a, b) => a.date.localeCompare(b.date) || slotIdx(a) - slotIdx(b));
     const past = mine.filter((m) => m.date < today).sort((a, b) => b.date.localeCompare(a.date) || slotIdx(a) - slotIdx(b)).slice(0, 12);
@@ -1463,7 +1471,7 @@ const Mis = {
         h('div', { class: 'aviso-when' }, icon(cancel ? 'x' : 'bell'), rel, h('span', { class: 'muted' }, ' · ' + timeAgo(n.ts))),
         h('h4', null, cancel ? 'Ya no tienes que sustituir a ' : 'Sustituyes a ', h('b', null, tName(n.absentId))),
         !cancel && sub && sub.place ? h('div', { class: 'aviso-place' }, icon('home'), placeTxt(sub)) : null,
-        !cancel && ab && ab.nota ? h('div', { class: 'small muted' }, 'Nota: ' + ab.nota) : null),
+        !cancel && n.nota ? h('div', { class: 'small muted' }, 'Nota: ' + n.nota) : null),
       h('button', { class: 'btn ' + (cancel ? 'ghost' : 'primary') + ' sm', onclick: () => this.read(n) }, icon('check'), 'Entendido'));
   },
   item(m, quiet) {
