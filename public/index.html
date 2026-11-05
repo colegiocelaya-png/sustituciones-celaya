@@ -250,6 +250,10 @@ textarea { width: 100%; resize: vertical; }
 .tidsel{max-width:11rem;min-height:36px;font:inherit;border-radius:8px}
 .chips.col .chip{flex-wrap:wrap;max-width:100%;height:auto;row-gap:6px}.tidsel{max-width:100%}
 #offbar{position:sticky;top:0;z-index:60;background:#1B1416;color:#fff;text-align:center;padding:8px 12px;font-size:.9rem}#offbar[hidden]{display:none}
+.greet{background:linear-gradient(135deg,var(--accent-soft,#F7D9DC),var(--card,#fff));border:1px solid color-mix(in srgb,var(--accent,#BF1D29) 25%,transparent);border-radius:16px;padding:14px 16px;margin:2px 0 6px}
+.greet-hi{margin:0 0 6px;font:700 1.25rem var(--font-d);color:var(--accent,#BF1D29)}
+.greet-q{margin:0;padding:0;border:0}.greet-q p{margin:0 0 4px;font-size:1.05rem;line-height:1.45;font-style:italic}.greet-q footer{font-size:.9rem;opacity:.8}
+@media print{.greet{display:none!important}}
 </style>
 
 <style>
@@ -1171,6 +1175,57 @@ function skeleton() {
     h('div', { class: 'skel-card' }, h('div', { class: 'skel-line w30' }), h('div', { class: 'skel-line' }), h('div', { class: 'skel-line w70' })));
 }
 
+/* =====================================================  SALUDO Y SERPENTINAS  */
+const SALUDO = "¡¡¡Buenos días profe!!!";
+const FRASES = [["El único modo de hacer un gran trabajo es amar lo que haces.","Steve Jobs",0],["La educación es el arma más poderosa que puedes usar para cambiar el mundo.","Nelson Mandela",0],["Caminante, no hay camino, se hace camino al andar.","Antonio Machado",0],["El que tiene un porqué para vivir puede soportar casi cualquier cómo.","Friedrich Nietzsche",0],["Un viaje de mil millas comienza con un solo paso.","Lao Tse",0],["Todo parece imposible hasta que se hace.","Nelson Mandela",0],["La educación no cambia el mundo, cambia a las personas que van a cambiar el mundo.","Paulo Freire",0],["Un buen maestro puede inspirar esperanza, encender la imaginación e infundir amor por el aprendizaje.","Brad Henry",0],["El éxito es la suma de pequeños esfuerzos repetidos día tras día.","Robert Collier",0],["La mejor manera de predecir el futuro es crearlo.","Peter Drucker",1],["Lo que haces hoy puede mejorar todos tus mañanas.","Ralph Marston",0],["Un día sin sonreír es un día perdido.","Charles Chaplin",1],["La vida es un 10 % lo que me sucede y un 90 % cómo reacciono ante ello.","Charles Swindoll",0],["Nada grande se ha hecho en el mundo sin pasión.","Georg W. F. Hegel",0],["No hay viento favorable para quien no sabe adónde va.","Séneca",0],["Somos lo que hacemos repetidamente. La excelencia no es un acto, sino un hábito.","Will Durant",0],["La imaginación es más importante que el conocimiento.","Albert Einstein",0],["La vida es como montar en bicicleta: para mantener el equilibrio, hay que seguir avanzando.","Albert Einstein",0],["Haz de cada día tu obra maestra.","John Wooden",0],["El optimismo es la fe que conduce al logro.","Helen Keller",0],["Lo único que debemos temer es al propio miedo.","Franklin D. Roosevelt",0],["Vivir es lo más raro del mundo. La mayoría de la gente existe, eso es todo.","Oscar Wilde",0],["La sonrisa cuesta menos que la electricidad y da más luz.","Proverbio escocés",0],["Educar la mente sin educar el corazón no es educación en absoluto.","Aristóteles",1],["El fracaso es la oportunidad de comenzar de nuevo con más inteligencia.","Henry Ford",1],["Cae siete veces, levántate ocho.","Proverbio japonés",0],["Cada mañana nacemos de nuevo. Lo que hacemos hoy es lo que más importa.","Buda",1],["Un maestro afecta a la eternidad; nunca puede saber dónde termina su influencia.","Henry Adams",0],["El secreto para salir adelante es comenzar.","Mark Twain",1],["Haz lo que puedas, con lo que tengas, donde estés.","Theodore Roosevelt",0],["Nunca dejes que lo que no puedes hacer interfiera con lo que sí puedes hacer.","John Wooden",0],["Haz lo mejor que puedas hasta que sepas más. Cuando sepas más, hazlo mejor.","Maya Angelou",0],["Quien lee mucho y anda mucho, ve mucho y sabe mucho.","Miguel de Cervantes",0],["La paciencia todo lo alcanza.","Santa Teresa de Jesús",0],["Lo esencial es invisible a los ojos.","Antoine de Saint-Exupéry",0],["Aprender sin pensar es inútil; pensar sin aprender, peligroso.","Confucio",0],["No importa lo despacio que vayas, siempre que no te detengas.","Confucio",1],["El mejor momento para plantar un árbol fue hace veinte años. El segundo mejor momento es ahora.","Proverbio chino",0],["Tu tiempo es limitado, no lo malgastes viviendo la vida de otro.","Steve Jobs",0],["El talento gana partidos, pero el trabajo en equipo gana campeonatos.","Michael Jordan",0],["No puedes cruzar el mar simplemente mirando el agua.","Rabindranath Tagore",0],["El futuro pertenece a quienes creen en la belleza de sus sueños.","Eleanor Roosevelt",1],["Si no puedes volar, corre; si no puedes correr, camina; pero sigue avanzando.","Martin Luther King Jr.",0],["La inspiración existe, pero tiene que encontrarte trabajando.","Pablo Picasso",1],["¡Qué maravilloso es que nadie necesite esperar un solo momento para empezar a mejorar el mundo!","Anne Frank",0],["Es más fácil construir niños fuertes que reparar adultos rotos.","Frederick Douglass",1],["Enseñar no es transferir conocimiento, sino crear las posibilidades para su producción.","Paulo Freire",0],["La alegría está en la lucha y el esfuerzo, no en la victoria misma.","Mahatma Gandhi",1],["Lo que con mucho trabajo se adquiere, más se ama.","Aristóteles",0],["Hoy es un buen día para empezar.","Walt Disney",1],["La alegría de ver y entender es el más perfecto don de la naturaleza.","Albert Einstein",0],["El arte supremo del maestro es despertar el placer de la expresión creativa y del conocimiento.","Albert Einstein",0],["Dime y lo olvido, enséñame y lo recuerdo, involúcrame y lo aprendo.","Benjamin Franklin",1],["Enseñar es recordar a otros que saben tan bien como tú.","Richard Bach",0],["La enseñanza que deja huella no es la que va de cabeza a cabeza, sino de corazón a corazón.","Howard Hendricks",0],["Lo que se les da a los niños, los niños darán a la sociedad.","Karl A. Menninger",0],["Hay un solo bien, el saber, y un solo mal, la ignorancia.","Sócrates",0],["La felicidad no es algo hecho. Viene de tus propias acciones.","Dalai Lama",0],["Sé el cambio que quieres ver en el mundo.","Mahatma Gandhi",1],["Nuestra mayor gloria no está en no caer nunca, sino en levantarnos cada vez que caemos.","Confucio",1],["La gente olvidará lo que dijiste, pero nunca cómo les hiciste sentir.","Maya Angelou",1],["Da siempre lo mejor de ti. Lo que plantes ahora, lo cosecharás más tarde.","Og Mandino",0],["Pensar es el trabajo más difícil que existe; quizá por eso son pocos los que lo practican.","Henry Ford",0],["No es que tengamos poco tiempo, sino que perdemos mucho.","Séneca",0],["Cuando cambias la forma de mirar las cosas, las cosas que miras cambian.","Wayne Dyer",0],["Si quieres ir rápido, ve solo; si quieres llegar lejos, ve acompañado.","Proverbio africano",0],["Lo que sabemos es una gota de agua; lo que ignoramos es el océano.","Isaac Newton",0],["Vive como si fueras a morir mañana. Aprende como si fueras a vivir siempre.","Mahatma Gandhi",1],["El que no sabe lo que busca no entiende lo que encuentra.","Claude Bernard",0],["El asombro es el principio de la sabiduría.","Sócrates",0],["Juntarse es un comienzo, mantenerse juntos es un progreso, trabajar juntos es un éxito.","Henry Ford",0],["La gota horada la piedra no por su fuerza, sino por su constancia.","Ovidio",0],["Mientras enseñamos, aprendemos.","Séneca",0],["El verdadero viaje de descubrimiento no consiste en buscar nuevas tierras, sino en mirar con nuevos ojos.","Marcel Proust",0],["Yo soy yo y mi circunstancia.","José Ortega y Gasset",0],["Hay quienes luchan toda la vida: esos son los imprescindibles.","Bertolt Brecht",0],["Hoy es siempre todavía.","Antonio Machado",0],["La infancia es el reino donde nadie muere.","Edna St. Vincent Millay",0],["Todo lo que una persona pueda imaginar, otras podrán hacerlo realidad.","Julio Verne",1],["Educar es lo mismo que poner motor a una barca.","Gabriel Celaya",0]]; // [frase, autor, atribuida]
+function fraseDelDia(d = new Date()) {
+  const n = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  return FRASES[((n % FRASES.length) + FRASES.length) % FRASES.length];
+}
+function greeting() {
+  const [txt, autor, atr] = fraseDelDia();
+  const el = h('div', { class: 'greet no-print' },
+    h('h2', { class: 'greet-hi' }, SALUDO),
+    h('blockquote', { class: 'greet-q' }, h('p', null, '“' + txt + '”'), h('footer', null, '— ' + (atr ? 'Atribuida a ' : '') + autor)));
+  if (!S.serpentinas) { S.serpentinas = true; setTimeout(serpentinas, 400); }
+  return el;
+}
+function serpentinas() {
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv = document.createElement('canvas');
+  cv.setAttribute('aria-hidden', 'true');
+  cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9998';
+  document.body.appendChild(cv);
+  const ctx = cv.getContext('2d'); if (!ctx) return cv.remove();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+  const cols = ['#BF1D29', '#E8A9AE', '#1B1416', '#F4C7CB', '#FFFFFF', '#D9434E'];
+  const mob = innerWidth < 600, N = mob ? 46 : 80;
+  const ps = Array.from({ length: N }, (_, i) => {
+    const ribbon = i % 3 !== 0;
+    return { ribbon, x: Math.random() * W, y: -Math.random() * H * 0.5 - 20 * dpr, vx: (Math.random() - 0.5) * 1.6 * dpr, vy: (1.6 + Math.random() * 2.6) * dpr,
+      ph: Math.random() * 6.28, sp: 0.06 + Math.random() * 0.08, len: (36 + Math.random() * 46) * dpr, amp: (5 + Math.random() * 6) * dpr, w: (2 + Math.random() * 2) * dpr,
+      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.12, c: cols[Math.floor(Math.random() * cols.length)] };
+  });
+  const T0 = performance.now(), DUR = 4200;
+  (function frame(t) {
+    const e = t - T0; ctx.clearRect(0, 0, W, H);
+    const fade = e > DUR - 900 ? Math.max(0, (DUR - e) / 900) : 1;
+    ctx.globalAlpha = fade;
+    for (const p of ps) {
+      p.x += p.vx + Math.sin(p.ph) * 0.6 * dpr; p.y += p.vy; p.ph += p.sp; p.rot += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      if (p.ribbon) {
+        ctx.strokeStyle = p.c; ctx.lineWidth = p.w; ctx.lineCap = 'round'; ctx.beginPath();
+        for (let k = 0; k <= 10; k++) { const yy = (k / 10) * p.len, xx = Math.sin(p.ph + k * 0.7) * p.amp; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }
+        ctx.stroke();
+      } else { ctx.fillStyle = p.c; ctx.fillRect(-p.w, -p.w, p.w * 2.2, p.w * 1.4); }
+      ctx.restore();
+    }
+    if (e < DUR) requestAnimationFrame(frame); else cv.remove();
+  })(T0);
+}
+
 /* =====================================================  HOY  */
 const Hoy = {
   el: h('section', { class: 'view', hidden: true }), built: false,
@@ -1186,6 +1241,7 @@ const Hoy = {
         h('button', { class: 'btn ghost', 'aria-label': 'Día siguiente', onclick: step(1) }, icon('chevr')),
         h('button', { class: 'btn ghost', onclick: () => { S.date = todayStr(); this.dateIn.value = S.date; subscribeDayNotifs(); refresh(Hoy); } }, 'Hoy')),
       this.dateLabel,
+      greeting(),
       (this.banner = h('div', { class: 'banners' })),
       (this.summary = h('div', { class: 'summary' })),
       (this.timeline = h('div', { class: 'card timeline-card' }))
@@ -1367,6 +1423,7 @@ const Panel = {
       h('button', { class: 'btn ghost', 'aria-label': 'Día siguiente', onclick: () => go2(addDays(date, 1)) }, icon('chevr')),
       h('button', { class: 'btn ghost', onclick: () => go2(today) }, 'Hoy'), printBtn('Imprimir panel')));
     el.append(h('p', { class: 'date-label' }, fmtDate(date) + (date === today ? ' · hoy' : '')));
+    el.append(greeting());
     if (!S.loaded.days) return el.append(skeleton());
     const day = S.days[date] || { absences: [], subs: [] };
     if (!weekdayKey(date)) el.append(h('p', { class: 'note warn' }, 'Fin de semana: no hay clase.'));
