@@ -334,6 +334,22 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
   .view.enter, .view.enter > *, .view.enter > .summary > .stat, .sheet-list, .sheet-bg { animation: none; }
 }
 
+
+/* ---- animaciones suaves ---- */
+@keyframes pop { 0% { opacity: 0; transform: translateY(10px) scale(.97); } 60% { opacity: 1; transform: translateY(0) scale(1.01); } 100% { transform: none; } }
+@keyframes wob { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-7deg) scale(1.06); } 60% { transform: rotate(5deg) scale(1.04); } }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.28) translateY(-2px); } 100% { transform: scale(1); } }
+.mydia.pop { animation: pop .5s cubic-bezier(.2, .8, .3, 1) both; }
+.mydia.pop .av { animation: wob .9s .25s ease-in-out both; }
+.bump { animation: bump .35s ease-out; }
+.av.foto img { transition: transform .25s ease; }
+@media (hover: hover) {
+  .av.foto:hover img { transform: scale(1.08); }
+  .pd-day, .row.link { transition: transform .18s ease, box-shadow .18s ease; }
+  .pd-day:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(27, 20, 22, .10); }
+}
+@media (prefers-reduced-motion: reduce) { .mydia.pop, .mydia.pop .av, .bump { animation: none; } .pd-day:hover { transform: none; } .av.foto img { transition: none; } }
+
 /* ---- avatares ---- */
 .av { --d: 46px; position: relative; overflow: hidden; width: var(--d); height: var(--d); border-radius: 50%; display: inline-grid; place-items: center; flex: none; font: 700 max(.7rem, calc(var(--d) * .38)) var(--font-d); letter-spacing: .02em; user-select: none; }
 .av.xl { --d: 84px; }
@@ -1112,6 +1128,7 @@ function renderBottomNav() {
 }
 function go(k) {
   S.tab = k; renderAll(); window.scrollTo(0, 0);
+  if (!REDUCE()) { document.querySelectorAll('#bnav .bn.on .bn-ico, #tabs .tab.on .ico').forEach((ic) => { ic.classList.remove('bump'); void ic.offsetWidth; ic.classList.add('bump'); }); }
   const v = views[k];
   if (v && v.el && !v.el.hidden) { v.el.classList.remove('enter'); void v.el.offsetWidth; v.el.classList.add('enter'); }
 }
@@ -1255,6 +1272,21 @@ function startMusic() {
     addEventListener('pointerdown', once, true); addEventListener('keydown', once, true);
   });
 }
+/* ---------- animaciones suaves ---------- */
+const REDUCE = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+function countUp(root, key) {
+  // los contadores suben de 0 al valor solo cuando cambian (no en cada refresco de datos)
+  const vals = [...root.querySelectorAll('.stat b')];
+  const sig = key + '|' + vals.map((b) => b.textContent).join(',');
+  if (S._statSig === sig || REDUCE()) { S._statSig = sig; return; }
+  S._statSig = sig;
+  vals.forEach((b) => {
+    const n = parseInt(b.textContent, 10); if (!(n > 0)) return;
+    const t0 = performance.now(), dur = 650;
+    const tick = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); b.textContent = Math.round(n * e); if (k < 1) requestAnimationFrame(tick); else b.textContent = n; };
+    b.textContent = 0; requestAnimationFrame(tick);
+  });
+}
 /* ---------- "Hoy te toca a ti" ---------- */
 function miDia(date) {
   if (!S.me || !tById(S.me) || !weekdayKey(date) || !S.loaded.school) return null;
@@ -1279,7 +1311,8 @@ function miDia(date) {
   }
   if (patio) items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, sessTime('R').split('–')[0]), h('span', null, h('b', null, 'Patio'), ' · recreo ' + sessTime('R'))));
   if (sm) items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, '—'), h('span', null, h('b', null, 'Servicios mínimos'), ' ese día')));
-  return h('div', { class: 'card mydia ' + cls + ' no-print' },
+  const mk = date + '|' + title + '|' + items.children.length, pop = S._mdKey !== mk; S._mdKey = mk;
+  return h('div', { class: 'card mydia ' + cls + ' no-print' + (pop && !REDUCE() ? ' pop' : '') },
     avatar(S.me, 'xl'),
     h('div', { class: 'md-body' }, h('p', { class: 'md-hi' }, 'Hola, ' + first), h('h2', { class: 'md-title' }, title), sub ? h('p', { class: 'muted md-sub' }, sub) : null, items.children.length ? items : null));
 }
@@ -1424,6 +1457,7 @@ const Hoy = {
       h('div', { class: 'stat' }, h('b', null, day.absences.length), h('span', null, day.absences.length === 1 ? 'profesor/a ausente' : 'profesores ausentes')),
       h('div', { class: 'stat' }, h('b', null, day.subs.filter((s) => s.subId).length), h('span', null, 'clases cubiertas')),
       h('div', { class: 'stat' + (sin ? ' bad' : ' good') }, h('b', null, sin), h('span', null, 'sin cubrir')));
+    countUp(this.summary, date);
 
     // línea del día
     this.timeline.textContent = '';
