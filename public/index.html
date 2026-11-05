@@ -249,6 +249,7 @@ textarea { width: 100%; resize: vertical; }
 }
 .tidsel{max-width:11rem;min-height:36px;font:inherit;border-radius:8px}
 .chips.col .chip{flex-wrap:wrap;max-width:100%;height:auto;row-gap:6px}.tidsel{max-width:100%}
+#offbar{position:sticky;top:0;z-index:60;background:#1B1416;color:#fff;text-align:center;padding:8px 12px;font-size:.9rem}#offbar[hidden]{display:none}
 </style>
 
 <style>
@@ -800,8 +801,14 @@ function toast(msg, bad) {
   t.className = 'toast show' + (bad ? ' bad' : '');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = 'toast'; }, 4200);
 }
+const offBar = h('div', { id: 'offbar', role: 'status' }, 'Sin conexión · se muestran los últimos datos guardados');
+offBar.hidden = navigator.onLine !== false;
+document.body.prepend(offBar);
+window.addEventListener('offline', () => { offBar.hidden = false; });
+window.addEventListener('online', () => { offBar.hidden = true; });
 let queue = Promise.resolve();
 function enqueue(fn) {
+  if (navigator.onLine === false) { toast('Sin conexión: no se puede guardar ahora.', true); return queue; }
   queue = queue.then(fn).catch((e) => {
     console.error(e);
     toast(e && e.code === 'invalid_argument' ? 'No tienes permiso para guardar este cambio.' : 'No se pudo guardar. Inténtalo de nuevo.', true);

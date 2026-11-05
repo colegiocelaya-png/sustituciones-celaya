@@ -18,6 +18,10 @@
   firebase.initializeApp(cfg);
   var auth = firebase.auth();
   var fs = firebase.firestore();
+  // Datos guardados en el dispositivo: la app abre y se lee sin conexión
+  try { if (fs.enablePersistence) fs.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
+  // Copia de la app para abrirla sin internet
+  if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(function () {}); });
   var ctx = null; // { uid, email, role }
 
   /* ---------- pantalla de acceso ---------- */

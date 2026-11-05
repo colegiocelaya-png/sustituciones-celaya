@@ -20,3 +20,22 @@ self.addEventListener('notificationclick', (e) => {
     return self.clients.openWindow(url);
   }));
 });
+
+/* ---- Uso sin conexión: se guarda una copia de la app y se usa si no hay internet ---- */
+const CACHE = 'celaya-v1';
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => {
+  e.waitUntil(self.clients.claim().then(() => caches.keys()).then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
+});
+self.addEventListener('fetch', (e) => {
+  const r = e.request;
+  if (r.method !== 'GET') return;
+  const u = new URL(r.url);
+  const mine = u.origin === self.location.origin && !u.pathname.startsWith('/api/');
+  const libs = /(^|\.)gstatic\.com$|^fonts\.googleapis\.com$/.test(u.hostname);
+  if (!mine && !libs) return; // Firestore y autenticación van directos a la red
+  e.respondWith(fetch(r).then((res) => {
+    if (res && (res.ok || res.type === 'opaque')) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(r, copy)).catch(() => {}); }
+    return res;
+  }).catch(() => caches.match(r).then((hit) => hit || (r.mode === 'navigate' ? caches.match('/') : undefined) || Response.error())));
+});
