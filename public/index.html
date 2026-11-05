@@ -336,6 +336,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 
 /* ---- avatares ---- */
 .av { --d: 46px; position: relative; overflow: hidden; width: var(--d); height: var(--d); border-radius: 50%; display: inline-grid; place-items: center; flex: none; font: 700 max(.7rem, calc(var(--d) * .38)) var(--font-d); letter-spacing: .02em; user-select: none; }
+.av.xl { --d: 84px; }
+.mydia { display: flex; align-items: center; gap: 16px; padding: 14px 16px; margin: 2px 0 8px; }
+.mydia.busy { border-left: 6px solid var(--accent, #BF1D29); background: linear-gradient(135deg, var(--accent-soft, #F9DAD7), var(--card, #fff) 70%); }
+.mydia.calm { border-left: 6px solid #1c7a4a; background: linear-gradient(135deg, color-mix(in srgb, #1c7a4a 14%, var(--card, #fff)), var(--card, #fff) 70%); }
+.md-body { min-width: 0; flex: 1; }
+.md-hi { margin: 0; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #6b5a5d); font-weight: 700; }
+.md-title { margin: 2px 0 4px; font: 700 1.3rem var(--font-d, inherit); }
+.md-sub { margin: 0; }
+.md-items { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.md-it { display: flex; gap: 10px; align-items: baseline; font-size: .96rem; }
+.md-time { min-width: 3.2em; font-variant-numeric: tabular-nums; color: var(--accent, #BF1D29); }
+@media (max-width: 420px) { .mydia { gap: 12px; padding: 12px; } .av.xl { --d: 68px; } .md-title { font-size: 1.15rem; } }
 .av.sm { --d: 32px; }
 .av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; background: #fff; }
 .av.foto { box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(27,20,22,.25); overflow: visible; } .av.foto img { overflow: hidden; }
@@ -1243,6 +1255,34 @@ function startMusic() {
     addEventListener('pointerdown', once, true); addEventListener('keydown', once, true);
   });
 }
+/* ---------- "Hoy te toca a ti" ---------- */
+function miDia(date) {
+  if (!S.me || !tById(S.me) || !weekdayKey(date) || !S.loaded.school) return null;
+  const wd = weekdayKey(date), today = todayStr(), isToday = date === today;
+  const day = S.days[date] || { absences: [], subs: [] };
+  const mine = (day.subs || []).filter((x) => x.subId === S.me).sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
+  const patio = onPatio(patioForDate(S.patios[date.slice(0, 7)], date), wd, S.me);
+  const absent = (day.absences || []).some((a) => a.tid === S.me);
+  const sm = strikeIds(date).length && smFor(date).includes(S.me);
+  const first = tName(S.me).split(' ')[0];
+  const when = isToday ? 'Hoy' : 'Ese día';
+  let title, sub, cls = 'calm';
+  if (mine.length) { title = when + ' tienes ' + mine.length + (mine.length === 1 ? ' sustitución' : ' sustituciones'); cls = 'busy'; }
+  else if (patio) { title = when + ' te toca patio'; cls = 'busy'; }
+  else if (absent) { title = when + ' faltas tú'; sub = 'Que todo vaya bien. Tus clases ya están cubiertas o en marcha.'; }
+  else { title = isToday ? 'Día tranquilo' : 'Ese día vas tranquilo/a'; sub = 'No tienes sustituciones ni patio ' + (isToday ? 'hoy.' : 'ese día.'); }
+  const items = h('div', { class: 'md-items' });
+  for (const m of mine) {
+    const nota = (S.dayNotifs.find((n) => n.key === m.key && n.to === S.me && n.kind === 'asigna') || {}).nota;
+    items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, sessTime(m.slot).split('–')[0]),
+      h('span', null, h('b', null, (m.slot === 'R' ? 'Recreo' : m.slot + 'ª hora') + ' · '), 'cubres a ' + tName(m.absentId) + ' · ' + placeTxt(m), nota ? h('span', { class: 'small muted' }, ' · Nota: ' + nota) : null)));
+  }
+  if (patio) items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, sessTime('R').split('–')[0]), h('span', null, h('b', null, 'Patio'), ' · recreo ' + sessTime('R'))));
+  if (sm) items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, '—'), h('span', null, h('b', null, 'Servicios mínimos'), ' ese día')));
+  return h('div', { class: 'card mydia ' + cls + ' no-print' },
+    avatar(S.me, 'xl'),
+    h('div', { class: 'md-body' }, h('p', { class: 'md-hi' }, 'Hola, ' + first), h('h2', { class: 'md-title' }, title), sub ? h('p', { class: 'muted md-sub' }, sub) : null, items.children.length ? items : null));
+}
 function greeting() {
   const [txt, autor, atr] = fraseDelDia();
   const el = h('div', { class: 'greet no-print' },
@@ -1302,6 +1342,7 @@ const Hoy = {
         h('button', { class: 'btn ghost', 'aria-label': 'Día siguiente', onclick: step(1) }, icon('chevr')),
         h('button', { class: 'btn ghost', onclick: () => { S.date = todayStr(); this.dateIn.value = S.date; subscribeDayNotifs(); refresh(Hoy); } }, 'Hoy')),
       this.dateLabel,
+      (this.mine = h('div', { class: 'mydia-wrap' })),
       greeting(),
       (this.banner = h('div', { class: 'banners' })),
       (this.summary = h('div', { class: 'summary' })),
@@ -1357,6 +1398,7 @@ const Hoy = {
     const date = S.date, wd = weekdayKey(date);
     this.dateIn.value = date;
     this.dateLabel.textContent = fmtDate(date) + (date === todayStr() ? ' · hoy' : '');
+    this.mine.textContent = ''; { const md = miDia(date); if (md) this.mine.append(md); }
     const prev = this.selT.value;
     this.selT.textContent = '';
     this.selT.append(h('option', { value: '' }, '— Elegir —'), sortedTeachers().map((t) => h('option', { value: t.id }, t.name + ' · ' + ROLES[t.role])));
