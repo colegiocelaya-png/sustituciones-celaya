@@ -1503,7 +1503,7 @@ const Panel = {
               h('div', { class: 'who-line' }, avatar(a.tid), h('b', null, tName(a.tid)), h('span', { class: 'role-tag' + (T && isSpecial(T.role) ? ' hl' : '') }, T ? ROLES[T.role] : '')),
               h('div', { class: 'muted small' }, full ? 'Todo el día' : a.slots.map((s) => (s === 'R' ? 'Recreo' : s + 'ª')).join(', '))),
             h('div', { class: 'cover' }, subs.length ? subs.map((s) => h('div', { class: 'small' + (s.subId && s.subId === S.me ? ' mine-line' : '') },
-              h('span', { class: 'time' }, (s.slot === 'R' ? 'Recreo' : s.slot + 'ª') + ' '), s.subId ? tName(s.subId) + (s.subId === S.me ? ' (tú)' : '') : h('b', { class: 'bad-t' }, 'sin cubrir'), h('span', { class: 'muted' }, ' · ' + s.place)))
+              h('span', { class: 'time' }, (s.slot === 'R' ? 'Recreo' : s.slot + 'ª') + ' '), s.subId ? tName(s.subId) + (s.subId === S.me ? ' (tú)' : '') : h('b', { class: 'bad-t' }, 'sin cubrir'), h('span', { class: 'muted' }, ' · ' + placeTxt(s))))
               : h('span', { class: 'muted small' }, 'No necesita sustituto'),
               lost.length ? h('div', { class: 'lost small' }, h('b', null, 'Sin su apoyo: '), lost.map((l) => l.s + 'ª ' + (l.c.g || '')).join(' · ')) : null));
         })));
