@@ -81,7 +81,14 @@
     auth.sendSignInLinkToEmail(email, { url: location.origin + '/', handleCodeInApp: true }).then(function () {
       try { localStorage.setItem(LS_EMAIL, email); } catch (e) {}
       ui('<h1 style="font-size:1.25rem;text-align:center;margin:0 0 8px">Revisa tu correo</h1><p style="text-align:center">Te hemos enviado un enlace a <b>' + esc(email) + '</b>. Ábrelo desde este mismo móvil. Si no llega, mira en spam.</p><button id="lg-back" style="' + plain + '">Volver</button>').querySelector('#lg-back').onclick = function () { showLogin('', email); };
-    }).catch(function () { showLogin('No se pudo enviar el enlace. Inténtalo de nuevo en un momento.', email); });
+    }).catch(function (e) {
+      var c = (e && e.code) || '';
+      var msg = c === 'auth/quota-exceeded' ? 'Firebase ha alcanzado su límite diario de enlaces por correo. Entra con tu contraseña o prueba mañana.'
+        : c === 'auth/unauthorized-continue-uri' || c === 'auth/invalid-continue-uri' ? 'Esta dirección no está autorizada en Firebase (Authentication → Configuración → Dominios autorizados).'
+        : c === 'auth/operation-not-allowed' ? 'El acceso por enlace no está activado en Firebase.'
+        : 'No se pudo enviar el enlace' + (c ? ' (' + c + ')' : '') + '. Entra con tu contraseña o inténtalo más tarde.';
+      showLogin(msg, email);
+    });
   }
   function showDenied(email) {
     var o = ui('<h1 style="font-size:1.25rem;text-align:center;margin:0 0 8px">Este correo no tiene acceso</h1><p style="text-align:center"><b>' + esc(email) + '</b> no está en la lista del centro. Pide a la jefatura de estudios que lo añada y vuelve a entrar.</p><button id="lg-out" style="' + primary + '">Usar otro correo</button>');
