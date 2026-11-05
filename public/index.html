@@ -254,6 +254,8 @@ textarea { width: 100%; resize: vertical; }
 .greet-hi{margin:0 0 6px;font:700 1.25rem var(--font-d);color:var(--accent,#BF1D29)}
 .greet-q{margin:0;padding:0;border:0}.greet-q p{margin:0 0 4px;font-size:1.05rem;line-height:1.45;font-style:italic}.greet-q footer{font-size:.9rem;opacity:.8}
 @media print{.greet{display:none!important}}
+.who-line + .muted{margin-top:8px}.who-line{row-gap:6px}
+@media (max-width:560px){.row.sub:has(> .cover){flex-wrap:wrap;row-gap:6px}.row.sub:has(> .cover) > .grow{flex:1 1 100%}.row.sub:has(> .cover) > .cover{flex:1 1 100%;text-align:left}}
 </style>
 
 <style>
@@ -321,8 +323,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 }
 
 /* ---- avatares ---- */
-.av { --d: 36px; width: var(--d); height: var(--d); border-radius: 50%; display: inline-grid; place-items: center; flex: none; font: 700 max(.7rem, calc(var(--d) * .38)) var(--font-d); letter-spacing: .02em; user-select: none; }
-.av.sm { --d: 24px; }
+.av { --d: 46px; position: relative; overflow: hidden; width: var(--d); height: var(--d); border-radius: 50%; display: inline-grid; place-items: center; flex: none; font: 700 max(.7rem, calc(var(--d) * .38)) var(--font-d); letter-spacing: .02em; user-select: none; }
+.av.sm { --d: 32px; }
+.av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; background: #fff; }
+.av.foto { box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(27,20,22,.25); overflow: visible; } .av.foto img { overflow: hidden; }
 .av0 { background: #3A2E31; color: #fff; } .av1 { background: #C8202C; color: #fff; } .av2 { background: #EBB4AE; color: #3A1418; }
 .av3 { background: #A8305E; color: #fff; } .av4 { background: #8A4141; color: #fff; } .av5 { background: #F6D5D0; color: #B3141F; box-shadow: inset 0 0 0 1px #E8B8B2; }
 .avJ { background: var(--ink); color: var(--bg); }
@@ -330,8 +334,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .role-tag { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface2); border-radius: 6px; padding: 2px 7px; }
 .role-tag.hl { color: var(--accent); background: var(--accent-soft); }
 .tl-abs, .tl-sub { display: inline-flex; align-items: center; gap: 6px; }
-.chip.pick .av.sm { --d: 22px; margin-left: -8px; } .chip.pick { padding-left: 10px; }
-.chip .av.sm { --d: 20px; margin-left: -6px; }
+.chip.pick .av.sm { --d: 28px; margin-left: -8px; } .chip.pick { padding-left: 10px; }
+.chip .av.sm { --d: 26px; margin-left: -6px; }
 .chip.pick.on .av { box-shadow: 0 0 0 2px var(--accent-ink); }
 
 /* ---- chat ---- */
@@ -1132,10 +1136,16 @@ function initials(name) {
   const w = String(name || '?').replace(/\(.*?\)/g, '').trim().split(/\s+/).filter(Boolean);
   return ((w[0] || '?')[0] + (w.length > 1 ? w[1][0] : '')).toUpperCase();
 }
+// Profesorado con foto (archivos en /avatars/<id>.jpg). Si falla la carga se muestran las iniciales.
+const FOTOS = new Set(['pablo']);
+const FOTOS_V = 1;
 function avatar(id, size, jefe) {
   const T = tById(id), name = jefe ? 'Jefatura' : (T ? T.name : '?');
   let n = 0; for (const ch of String(jefe ? 'jefe' : id)) n = (n * 31 + ch.charCodeAt(0)) % 997;
-  return h('span', { class: 'av av' + (jefe ? 'J' : n % 6) + (size ? ' ' + size : ''), 'aria-hidden': 'true', title: name }, jefe ? 'JE' : initials(name));
+  const foto = !jefe && FOTOS.has(id);
+  const el = h('span', { class: 'av av' + (jefe ? 'J' : n % 6) + (size ? ' ' + size : '') + (foto ? ' foto' : ''), 'aria-hidden': 'true', title: name }, jefe ? 'JE' : initials(name));
+  if (foto) { const im = h('img', { src: '/avatars/' + id + '.jpg?v=' + FOTOS_V, alt: '', loading: 'lazy', decoding: 'async' }); im.onerror = () => { im.remove(); el.classList.remove('foto'); }; el.append(im); }
+  return el;
 }
 document.documentElement.lang = 'es';
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.more) { S.more = false; renderBottomNav(); const b = document.querySelector('#bnav .bn:last-child'); if (b) b.focus(); } });
