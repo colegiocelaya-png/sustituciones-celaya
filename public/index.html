@@ -856,6 +856,8 @@ async function saveDay(date, next, old) {
   for (const [k, o] of oldMap) if (!nextMap.has(k) && o.subId) out.push(mk(o, o.subId, 'cancela', old));
   // la marca de huelga es privada de jefatura: no se guarda en el documento que lee el profesorado
   next.subs = next.subs.map((x) => { const y = { ...x }; delete y.strike; return y; });
+  // quién sustituye ese día: lo usan las reglas de seguridad para limitar el chat del día a sus participantes
+  next.subIds = {}; for (const x of next.subs) if (x.subId) next.subIds[x.subId] = true;
   S.days[date] = next;
   renderAll();
   if (notasCambian) { S.priv[date] = { ...(S.priv[date] || {}), notas }; await S.db.doc('private/' + date).set({ notas }, { merge: true }); }

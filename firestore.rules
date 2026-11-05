@@ -5,6 +5,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function isAllowed() { return signedIn() && exists(/databases/$(database)/documents/access/$(email())); }
     function myTid() { return get(/databases/$(database)/documents/access/$(email())).data.get('tid', ''); }
+    function inDay(date) { return get(/databases/$(database)/documents/days/$(date)).data.get('subIds', {}).get(myTid(), false) == true; }
     function isAdmin() { return isAllowed() && get(/databases/$(database)/documents/access/$(email())).data.role == 'admin'; }
 
     // Lista de correos autorizados: cada persona puede leer su propia ficha; la jefatura, todas.
@@ -30,12 +31,12 @@ service cloud.firestore {
 
     // Chat de cada día
     match /chats/{date}/msgs/{m} {
-      allow read: if isAllowed();
+      allow read: if isAdmin() || (isAllowed() && inDay(date));
       allow create: if isAllowed() && request.resource.data.uid == request.auth.uid
-        && (isAdmin() || (request.resource.data.tid == myTid() && request.resource.data.jefe == false));
+        && (isAdmin() || (inDay(date) && request.resource.data.tid == myTid() && request.resource.data.jefe == false));
       allow delete: if isAdmin();
     }
-    match /chats/{date}/seen/{s} { allow read: if isAllowed(); allow write: if isAdmin() || (isAllowed() && s == myTid()); }
+    match /chats/{date}/seen/{s} { allow read: if isAdmin() || (isAllowed() && inDay(date)); allow write: if isAdmin() || (isAllowed() && s == myTid() && inDay(date)); }
 
     // Dispositivos para notificaciones
     match /tokens/{t} {
