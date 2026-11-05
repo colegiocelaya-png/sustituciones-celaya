@@ -52,15 +52,13 @@
       '<label for="lg-pass" style="font-weight:700;display:block;margin-top:12px">Contraseña</label>' +
       '<input id="lg-pass" type="password" autocomplete="current-password" placeholder="La que te ha dado la jefatura" style="' + inp + '">' +
       '<button id="lg-pw" style="' + primary + '">Entrar</button>' +
-      '<p style="text-align:center;margin:14px 0 0;opacity:.7;font-size:.9rem">¿Sin contraseña?</p>' +
-      '<button id="lg-link" style="' + plain + '">Enviarme un enlace de acceso</button>' +
+      '<p style="text-align:center;margin:14px 0 0;opacity:.7;font-size:.9rem">o</p>' +
       '<button id="lg-google" style="' + plain + '">Entrar con Google</button>' +
       '<p style="font-size:.85rem;opacity:.7;margin:14px 0 0">Solo pueden entrar los correos que ha autorizado la jefatura de estudios.</p>');
     o.querySelector('#lg-pw').onclick = signInPassword;
     o.querySelector('#lg-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') signInPassword(); });
-    o.querySelector('#lg-link').onclick = sendLink;
     o.querySelector('#lg-google').onclick = function () {
-      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function (e) { if (e && e.code !== 'auth/popup-closed-by-user') showLogin('No se pudo entrar con Google. Prueba con la contraseña o el enlace por correo.'); });
+      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function (e) { if (e && e.code !== 'auth/popup-closed-by-user') showLogin('No se pudo entrar con Google. Prueba con tu correo y contraseña.'); });
     };
   }
   function signInPassword() {
