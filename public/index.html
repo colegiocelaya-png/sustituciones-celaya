@@ -152,6 +152,18 @@ textarea { width: 100%; resize: vertical; }
 .card-head.tight { margin-bottom: 4px; flex-wrap: nowrap; }
 .field.short input { width: 90px; } .field.short { max-width: 260px; }
 .patio-sec { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.pd-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.pd-day { display: flex; flex-direction: column; gap: 10px; }
+.pd-day.past { opacity: .6; }
+.pd-day.today { border-color: var(--accent, #c8202f); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #c8202f) 25%, transparent); }
+.pd-day.mine { border-left: 5px solid var(--accent, #c8202f); }
+.pd-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pd-head h3 { margin: 0; font-size: 1.02rem; }
+.pd-old > summary { cursor: pointer; padding: 10px 2px; font-weight: 600; color: var(--muted, #6b5a5d); }
+.pd-old[open] > summary { margin-bottom: 8px; }
+.pd-grp { display: flex; flex-direction: column; gap: 6px; }
+.pd-lbl { display: flex; align-items: center; gap: 8px; font-size: .86rem; }
+.pd-grp select { align-self: flex-start; max-width: 100%; }
 .patio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .day-col select { width: 100%; }
 
@@ -1707,24 +1719,27 @@ const Patios = {
     const wrap = h('div', { class: 'patio-sec' });
     const today = todayStr();
     const reqP = S.school.patioPrim || 6, reqI = S.school.patioInf || 5;
-    const col = (dt, k, req) => {
+    const col = (dt, k, req, lbl) => {
       const e = doc.dates[dt], ids = e[k] || [];
-      const sel = S.admin ? h('select', { 'aria-label': 'Añadir el ' + dt, onchange: (ev) => { const v = ev.target.value; if (v) savePatio(month, (x) => { const q = x.dates[dt]; q[k] = [...new Set([...(q[k] || []), v])]; }); } },
+      const sel = S.admin ? h('select', { 'aria-label': 'Añadir el ' + dt + ' (' + lbl + ')', onchange: (ev) => { const v = ev.target.value; if (v) savePatio(month, (x) => { const q = x.dates[dt]; q[k] = [...new Set([...(q[k] || []), v])]; }); } },
         h('option', { value: '' }, '+ Añadir'), sortedTeachers().filter((t) => !ids.includes(t.id)).map((t) => h('option', { value: t.id }, t.name))) : null;
-      return h('td', null, h('div', { class: 'chips' }, ids.map((id) => h('span', { class: 'chip rm' + (id === S.me ? ' me' : '') }, tName(id),
-        S.admin ? h('button', { class: 'x', 'aria-label': 'Quitar a ' + tName(id), onclick: () => savePatio(month, (x) => { x.dates[dt][k] = (x.dates[dt][k] || []).filter((i) => i !== id); }) }, '×') : null))),
-        h('span', { class: 'pill' + (ids.length === req ? ' tier t1' : ' bad'), title: 'Asignados / necesarios' }, ids.length + '/' + req), sel);
+      return h('div', { class: 'pd-grp' },
+        h('div', { class: 'pd-lbl' }, h('b', null, lbl), h('span', { class: 'pill' + (ids.length === req ? ' tier t1' : ' bad'), title: 'Asignados / necesarios' }, ids.length + '/' + req)),
+        ids.length ? h('div', { class: 'chips' }, ids.map((id) => h('span', { class: 'chip rm' + (id === S.me ? ' me' : '') }, tName(id),
+          S.admin ? h('button', { class: 'x', 'aria-label': 'Quitar a ' + tName(id), onclick: () => savePatio(month, (x) => { x.dates[dt][k] = (x.dates[dt][k] || []).filter((i) => i !== id); }) }, '×') : null))) : h('p', { class: 'muted small' }, 'Sin asignar'),
+        sel);
     };
-    const tbl = h('table', { class: 'sched' });
-    tbl.append(h('thead', null, h('tr', null, h('th', null, 'Día'), h('th', null, 'Primaria'), h('th', null, 'Infantil'))));
-    const body = h('tbody');
+    const list = h('div', { class: 'pd-list' }), olds = h('div', { class: 'pd-list' });
     for (const dt of Object.keys(doc.dates).sort()) {
       const e = doc.dates[dt];
-      if (e.todos) { body.append(h('tr', null, h('th', null, fmtDate(dt)), h('td', { colspan: 2 }, h('span', { class: 'pill accent' }, 'Todos los profesores en el patio')))); continue; }
-      body.append(h('tr', { class: dt === today ? 'today' : '' }, h('th', null, fmtDate(dt), dt === today ? h('span', { class: 'pill accent' }, 'hoy') : null), col(dt, 'prim', reqP), col(dt, 'inf', reqI)));
+      const head = h('div', { class: 'pd-head' }, h('h3', null, ((x) => x.charAt(0).toUpperCase() + x.slice(1))(fmtDate(dt))), dt === today ? h('span', { class: 'pill accent' }, 'hoy') : null);
+      const dest = dt < today ? olds : list;
+      if (e.todos) { dest.append(h('div', { class: 'card pd-day' + (dt === today ? ' today' : '') + (dt < today ? ' past' : '') }, head, h('span', { class: 'pill accent' }, 'Todos los profesores en el patio'))); continue; }
+      const mine = S.me && ((e.prim || []).includes(S.me) || (e.inf || []).includes(S.me));
+      dest.append(h('div', { class: 'card pd-day' + (dt === today ? ' today' : '') + (dt < today ? ' past' : '') + (mine ? ' mine' : '') }, head, col(dt, 'prim', reqP, 'Primaria'), col(dt, 'inf', reqI, 'Infantil')));
     }
-    tbl.append(body);
-    wrap.append(h('p', { class: 'muted small' }, 'Recreo ' + sessTime('R') + ' · calendario por fechas.'), h('div', { class: 'card', style: 'overflow-x:auto' }, tbl));
+    wrap.append(h('p', { class: 'muted small' }, 'Recreo ' + sessTime('R') + ' · calendario por fechas.' + (S.me ? ' Tus días llevan una marca roja.' : '')), list);
+    if (olds.children.length) wrap.append(h('details', { class: 'pd-old' }, h('summary', null, 'Días anteriores (' + olds.children.length + ')'), olds));
     return wrap;
   },
   section(month, doc, key, label) {
