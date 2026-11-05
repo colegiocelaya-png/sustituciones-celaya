@@ -31,6 +31,7 @@ self.addEventListener('fetch', (e) => {
   const r = e.request;
   if (r.method !== 'GET') return;
   const u = new URL(r.url);
+  if (u.pathname.startsWith('/sonido/')) return; // el audio pide trozos (Range): que lo gestione el navegador
   const mine = u.origin === self.location.origin && !u.pathname.startsWith('/api/');
   const libs = /(^|\.)gstatic\.com$|^fonts\.googleapis\.com$/.test(u.hostname);
   if (!mine && !libs) return; // Firestore y autenticación van directos a la red

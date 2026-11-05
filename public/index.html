@@ -1052,6 +1052,7 @@ function renderHeader() {
   const me = S.me && tById(S.me);
   w.append(h('span', { class: 'pill ' + (S.admin ? 'accent' : '') }, S.admin ? 'Jefatura de estudios' : 'Profesorado'));
   if (me) w.append(h('span', { class: 'who-name' }, me.name));
+  w.append(musicBtn());
 }
 function unreadCount() { return S.notifs.filter((n) => !n.read).length; }
 const TAB_ICONS = { hoy: 'home', panel: 'calendar', mis: 'bell', chat: 'chat', patios: 'sun', prof: 'users', sm: 'shield', centro: 'school' };
@@ -1120,6 +1121,8 @@ function cellState(T, wd, slot) {
   return (isSpecial(T.role) ? 'sesión ' + ROLES[T.role] : 'en clase') + (c.g ? ' ' + c.g : '');
 }
 const ICONS = {
+  sound: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
+  mute: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   check: '<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -1204,12 +1207,48 @@ function fraseDelDia(d = new Date()) {
   const n = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
   return FRASES[((n % FRASES.length) + FRASES.length) % FRASES.length];
 }
+/* ---------- música de bienvenida ---------- */
+const MUS = { a: null, tried: false };
+const musOff = () => { try { return localStorage.getItem('celaya_musica') === 'off'; } catch (e) { return false; } };
+function musAudio() {
+  if (!MUS.a) { MUS.a = new Audio('/sonido/energia-matutina.mp3'); MUS.a.preload = 'auto'; MUS.a.volume = 0.6; MUS.a.addEventListener('ended', syncMusicBtn); }
+  return MUS.a;
+}
+function musicBtn() {
+  const b = h('button', { class: 'btn ghost sm snd no-print', id: 'snd', type: 'button', onclick: toggleMusic });
+  MUS.btn = b; syncMusicBtn(); return b;
+}
+function syncMusicBtn() {
+  const b = MUS.btn; if (!b) return;
+  const on = !musOff() && MUS.a && !MUS.a.paused && !MUS.a.ended;
+  const off = musOff();
+  b.textContent = ''; b.append(icon(on ? 'sound' : 'mute'));
+  b.setAttribute('aria-label', off ? 'Activar la música de bienvenida' : on ? 'Parar la música' : 'Música de bienvenida');
+  b.title = off ? 'Música desactivada · pulsa para activarla' : on ? 'Parar la música (y no volver a ponerla)' : 'Activar la música';
+}
+function toggleMusic() {
+  const a = musAudio();
+  if (!musOff() && !a.paused) { try { localStorage.setItem('celaya_musica', 'off'); } catch (e) {} a.pause(); }
+  else { try { localStorage.removeItem('celaya_musica'); } catch (e) {} a.currentTime = 0; a.play().catch(() => {}); }
+  syncMusicBtn();
+}
+function startMusic() {
+  if (MUS.tried || musOff()) return; MUS.tried = true;
+  const a = musAudio();
+  const go = () => { if (musOff()) return; a.play().then(syncMusicBtn).catch(() => {}); };
+  a.addEventListener('play', syncMusicBtn); a.addEventListener('pause', syncMusicBtn);
+  a.play().then(syncMusicBtn).catch(() => {
+    // el navegador exige un gesto del usuario: suena con el primer toque
+    const once = () => { removeEventListener('pointerdown', once, true); removeEventListener('keydown', once, true); go(); };
+    addEventListener('pointerdown', once, true); addEventListener('keydown', once, true);
+  });
+}
 function greeting() {
   const [txt, autor, atr] = fraseDelDia();
   const el = h('div', { class: 'greet no-print' },
     h('h2', { class: 'greet-hi' }, SALUDO),
     h('blockquote', { class: 'greet-q' }, h('p', null, '“' + txt + '”'), h('footer', null, '— ' + (atr ? 'Atribuida a ' : '') + autor)));
-  if (!S.serpentinas) { S.serpentinas = true; setTimeout(serpentinas, 400); }
+  if (!S.serpentinas) { S.serpentinas = true; setTimeout(serpentinas, 400); startMusic(); }
   return el;
 }
 function serpentinas() {
