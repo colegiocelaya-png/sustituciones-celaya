@@ -46,6 +46,7 @@ module.exports = async (req, res) => {
       const e = String(raw || '').trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) continue;
       // solo a correos que estén en la lista de acceso
+      if (e === email) { out.push({ email: e, error: 'tu propia cuenta (no se toca para no cerrarte la sesión)' }); continue; }
       const a = await db.doc('access/' + e).get();
       if (!a.exists) { out.push({ email: e, error: 'no está en la lista' }); continue; }
       const password = genPassword();
