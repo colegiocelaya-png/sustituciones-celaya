@@ -335,6 +335,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 }
 
 
+/* ---- rotación de patios ---- */
+.rot > summary { cursor: pointer; padding: 2px 0; }
+.rot[open] > summary { margin-bottom: 8px; }
+.rot-list { display: flex; flex-direction: column; gap: 2px; }
+.rot-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 10px; }
+.rot-row.next { background: color-mix(in srgb, var(--accent, #BF1D29) 8%, transparent); }
+.rot-pos { width: 1.6em; text-align: center; font-weight: 700; color: var(--muted, #6b5a5d); font-variant-numeric: tabular-nums; }
+.rot-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.rot > summary { display: flex; flex-direction: column; gap: 2px; }
+.rot-edit { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 0 4px 8px 42px; }
+.rot-edit input[type=number] { width: 5em; }
+.rot-item:not(:hover):not(:focus-within) .rot-edit { display: none; }
+@media (hover: none) { .rot-item .rot-edit { display: flex; } }
+
 /* ---- animaciones suaves ---- */
 @keyframes pop { 0% { opacity: 0; transform: translateY(10px) scale(.97); } 60% { opacity: 1; transform: translateY(0) scale(1.01); } 100% { transform: none; } }
 @keyframes wob { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-7deg) scale(1.06); } 60% { transform: rotate(5deg) scale(1.04); } }
@@ -539,6 +553,36 @@ function loadMap(days, exceptDate) {
   return m;
 }
 
+/* Rotación de patios extra: quien lleva menos patios extra va primero; a igualdad, quien hizo el último hace más tiempo
+   (quien nunca ha hecho ninguno, antes); a igualdad total, orden alfabético. Se salta a quien no puede ese día sin perder su turno.
+   Historial: ctx.patioExtra = { desde: 'AAAA-MM-DD', base: { id: { n, last } } }. Los patios extra de la app se cuentan desde "desde". */
+const PATIO_DESDE = '2026-11-06';
+const PATIO_BASE_DEFAULT = {
+  natalia: { n: 1, last: '2026-10-15' },
+  'miriam-f': { n: 1, last: '2026-10-16' },
+  eli: { n: 1, last: '2026-10-14' },
+  pablo: { n: 1, last: '2026-10-14' }
+};
+function patioLedger(ctx, exceptDate) {
+  const px = ctx.patioExtra || {};
+  const desde = px.desde || PATIO_DESDE, base = px.base || PATIO_BASE_DEFAULT;
+  const led = {};
+  for (const id in base) led[id] = { n: base[id].n || 0, last: base[id].last || '' };
+  for (const d in ctx.days || {}) {
+    if (d === exceptDate || d < desde) continue;
+    for (const s of ctx.days[d].subs || []) {
+      if (s.slot !== 'R' || !s.subId) continue;
+      const e = led[s.subId] || (led[s.subId] = { n: 0, last: '' });
+      e.n++; if (d > e.last) e.last = d;
+    }
+  }
+  return led;
+}
+const patioCmp = (led) => (a, b) => {
+  const x = led[a.id] || { n: 0, last: '' }, y = led[b.id] || { n: 0, last: '' };
+  return x.n - y.n || (x.last < y.last ? -1 : x.last > y.last ? 1 : 0) || a.name.localeCompare(b.name, 'es');
+};
+
 /* Reparto. ctx = {teachers, patio, days, maxDir} */
 function assign(day, date, ctx, resetAll) {
   const wd = weekdayKey(date);
@@ -548,8 +592,12 @@ function assign(day, date, ctx, resetAll) {
   const needs = needsFor(day, wd, teachers, ctx.patio, ctx.strike);
   const old = new Map((day.subs || []).map((s) => [s.key, s]));
   const load = loadMap(ctx.days, date);
+  const pled = patioLedger(ctx, date), pcmp = patioCmp(pled);
   const used = {};
-  const mark = (slot, id) => { (used[slot] = used[slot] || new Set()).add(id); load[id] = (load[id] || 0) + 1; };
+  const mark = (slot, id) => {
+    (used[slot] = used[slot] || new Set()).add(id); load[id] = (load[id] || 0) + 1;
+    if (slot === 'R') { const e = pled[id] || (pled[id] = { n: 0, last: '' }); e.n++; if (date > e.last) e.last = date; }
+  };
   const roleOf = (id) => (teachers.find((t) => t.id === id) || {}).role;
   const dirToday = {};
   const out = [];
@@ -617,7 +665,7 @@ function assign(day, date, ctx, resetAll) {
           return 0;
         };
         const score = (T) => kind.startsWith('dir') ? lectiveDay(T, wd) + (dirToday[T.id] || 0) : (load[T.id] || 0) / capacity(T);
-        list.sort((a, b) => rank(a) - rank(b) || score(a) - score(b) || a.name.localeCompare(b.name, 'es'));
+        list.sort((a, b) => rank(a) - rank(b) || (n.slot === 'R' ? pcmp(a, b) : 0) || score(a) - score(b) || a.name.localeCompare(b.name, 'es'));
         got = { T: list[0], kind, fb: kind !== kinds[0] };
         break;
       }
@@ -647,7 +695,7 @@ function assign(day, date, ctx, resetAll) {
       };
       // Directivos: compensar clases del día con sustituciones. Resto: sustituciones pasadas en proporción a sus huecos.
       const score = (T) => (tier === 4 || tier === 9) ? lectiveDay(T, wd) + (dirToday[T.id] || 0) : (load[T.id] || 0) / capacity(T);
-      list.sort((a, b) => rank(a) - rank(b) || score(a) - score(b) || (load[a.id] || 0) - (load[b.id] || 0) || a.name.localeCompare(b.name, 'es'));
+      list.sort((a, b) => rank(a) - rank(b) || (n.slot === 'R' ? pcmp(a, b) : 0) || score(a) - score(b) || (load[a.id] || 0) - (load[b.id] || 0) || a.name.localeCompare(b.name, 'es'));
       picked = list[0]; pickedTier = tier; break;
     }
     if (picked) {
@@ -836,7 +884,7 @@ const sortedTeachers = () => [...S.school.teachers].sort((a, b) => a.name.locale
 const strikeIds = (d) => (S.priv[d] && S.priv[d].huelga) || [];
 const weekStart = (date) => addDays(date, -((toDate(date).getDay() + 6) % 7));
 const smFor = (date) => { const wd = weekdayKey(date); return wd ? (((S.sm[weekStart(date)] || {}).days || {})[wd] || []) : []; };
-const ctxFor = (date) => ({ teachers: S.school.teachers, patio: S.patios[date.slice(0, 7)], days: S.days, maxDir: S.school.maxDir || 2, strike: strikeIds(date), sm: smFor(date) });
+const ctxFor = (date) => ({ teachers: S.school.teachers, patio: S.patios[date.slice(0, 7)], days: S.days, maxDir: S.school.maxDir || 2, patioExtra: S.school.patioExtra, strike: strikeIds(date), sm: smFor(date) });
 function savePriv(date, ids) { S.priv[date] = { ...(S.priv[date] || {}), huelga: ids }; return S.db.doc('private/' + date).set({ huelga: ids }, { merge: true }); }
 const notasOf = (date) => (S.priv[date] || {}).notas || {};
 
@@ -1815,6 +1863,38 @@ const Chat = {
 views.chat = Chat;
 
 /* =====================================================  PATIOS  */
+/* ---------- rotación de patios extra (solo jefatura) ---------- */
+function rotacionCard() {
+  const ctx = ctxFor(todayStr()), px = S.school.patioExtra || { desde: PATIO_DESDE, base: PATIO_BASE_DEFAULT };
+  const base = px.base || {}, desde = px.desde || PATIO_DESDE;
+  const led = patioLedger(ctx, ''), cmp = patioCmp(led);
+  const app = {};
+  for (const d in S.days) { if (d < desde) continue; for (const x of S.days[d].subs || []) if (x.slot === 'R' && x.subId) app[x.subId] = (app[x.subId] || 0) + 1; }
+  const who = S.school.teachers.filter((t) => t.role !== 'directivo').slice().sort(cmp);
+  const fm = (d) => (d ? d.slice(8) + '/' + d.slice(5, 7) : '—');
+  const saveBase = (id, patch) => saveSchool((x) => {
+    x.patioExtra = x.patioExtra || { desde: PATIO_DESDE, base: JSON.parse(JSON.stringify(PATIO_BASE_DEFAULT)) };
+    x.patioExtra.base = x.patioExtra.base || {};
+    x.patioExtra.base[id] = Object.assign({ n: 0, last: '' }, x.patioExtra.base[id], patch);
+  });
+  const next = who.slice(0, 3).map((t) => t.name).join(' · ');
+  const list = h('div', { class: 'rot-list' }, who.map((t, i) => {
+    const b = base[t.id] || { n: 0, last: '' };
+    const row = h('div', { class: 'rot-row' + (i < 3 ? ' next' : '') },
+      h('span', { class: 'rot-pos' }, i + 1), avatar(t.id, 'sm'),
+      h('span', { class: 'rot-name' }, h('b', null, t.name), h('span', { class: 'muted small rot-last' }, 'Último patio extra: ' + fm((led[t.id] || {}).last))),
+      h('span', { class: 'pill' + ((led[t.id] || {}).n ? ' tier t1' : '') , title: 'Patios extra hechos este curso' }, ((led[t.id] || {}).n || 0) + ' extra'));
+    const ed = h('div', { class: 'rot-edit' },
+      h('label', { class: 'field' }, h('span', null, 'Historial'), h('input', { type: 'number', min: 0, max: 99, value: b.n || 0, 'aria-label': 'Patios extra anteriores de ' + t.name, onchange: (e) => saveBase(t.id, { n: Math.max(0, parseInt(e.target.value, 10) || 0) }) })),
+      h('label', { class: 'field' }, h('span', null, 'Último (historial)'), h('input', { type: 'date', value: b.last || '', 'aria-label': 'Fecha del último patio extra de ' + t.name, onchange: (e) => saveBase(t.id, { last: e.target.value || '' }) })),
+      h('span', { class: 'muted small' }, 'En la app: ' + (app[t.id] || 0)));
+    return h('div', { class: 'rot-item' }, row, ed);
+  }));
+  return h('details', { class: 'card rot no-print' },
+    h('summary', null, h('b', null, 'Rotación de patios extra'), h('span', { class: 'muted small rot-next' }, 'Siguen: ' + (next || '—'))),
+    h('p', { class: 'muted small' }, 'Los patios que hay que cubrir van por turno riguroso: primero quien menos patios extra lleva y, a igualdad, quien hizo el último hace más tiempo. Si alguien no puede ese día (falta, tiene patio o no está), se salta sin perder su turno. Se cuentan los hechos en la app desde el ' + fm(desde) + ' más el historial anterior.'),
+    list);
+}
 const Patios = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { $('#main').append(this.el); },
@@ -1825,6 +1905,7 @@ const Patios = {
     const label = toDate(month + '-01').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     el.append(h('div', { class: 'toolbar' }, monthIn, S.admin && S.patios[prevMonth(month)] && !doc ? h('button', { class: 'btn ghost', onclick: () => savePatio(month, (d) => { const p = S.patios[prevMonth(month)]; d.turns = JSON.parse(JSON.stringify(p.turns || d.turns)); d.turnsInf = JSON.parse(JSON.stringify(p.turnsInf || d.turnsInf)); }) }, 'Copiar del mes anterior') : null));
     el.append(h('h2', { class: 'cap' }, 'Turnos de patio · ' + label));
+    if (S.admin && S.school.teachers.length) el.append(rotacionCard());
     if (!S.school.teachers.length) return el.append(empty('No hay profesorado cargado', 'Importa antes los horarios en la pestaña Profesorado.', null, 'users'));
     if (!doc && !S.admin) return el.append(empty('Aún no se han publicado los turnos de este mes', 'Cuando la jefatura los cargue, los verás aquí.', null, 'calendar'));
     if (doc && doc.dates) return el.append(this.byDate(month, doc));
