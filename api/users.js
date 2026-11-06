@@ -6,7 +6,7 @@ function init() {
   if (!admin) admin = require('firebase-admin'); // se carga aquí para poder explicar el error si falta
   if (admin.apps.length) return;
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!raw) { const vistas = Object.keys(process.env).filter((k) => /FIREBASE|SERVICE|ACCOUNT|GOOGLE/i.test(k)).join(',') || 'ninguna'; throw Object.assign(new Error('x'), { code: 'sin-clave · variables vistas: ' + vistas + ' · entorno: ' + (process.env.VERCEL_ENV || '?') }); }
+  if (!raw) { throw Object.assign(new Error('x'), { code: 'sin-clave' }); }
   raw = raw.trim().replace(/^["']|["']$/g, '').trim();
   if (!raw.startsWith('{')) {
     // por si se pegó codificada en base64
@@ -19,19 +19,21 @@ function init() {
 }
 const ALPHA = 'abcdefghjkmnpqrstuvwxyz23456789';
 function genPassword() {
-  const b = require('crypto').randomBytes(8);
+  const b = require('crypto').randomBytes(10);
   let s = '';
-  for (let i = 0; i < 8; i++) s += ALPHA[b[i] % ALPHA.length];
+  for (let i = 0; i < 10; i++) s += ALPHA[b[i] % ALPHA.length];
   return s;
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+  if (req.headers['sec-fetch-site'] === 'cross-site') return res.status(403).json({ error: 'forbidden' });
   try {
     init();
     const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
     if (!m) return res.status(401).json({ error: 'no auth' });
-    const decoded = await admin.auth().verifyIdToken(m[1]);
+    const decoded = await admin.auth().verifyIdToken(m[1], true);
     const email = (decoded.email || '').toLowerCase();
     const db = admin.firestore();
     const acc = email && decoded.email_verified ? await db.doc('access/' + email).get() : null;

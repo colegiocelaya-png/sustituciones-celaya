@@ -177,6 +177,29 @@
       return saveToken(tid).catch(function () {});
     }
   };
+  /* ---------- cerrar sesión: borra los datos guardados en este dispositivo ---------- */
+  window.authApi = {
+    signOut: function () {
+      var tokenDel = Promise.resolve();
+      try {
+        if (ctx && swReg && firebase.messaging.isSupported()) {
+          var uid = ctx.uid, m = firebase.messaging();
+          tokenDel = m.getToken({ vapidKey: self.FIREBASE_VAPID_KEY, serviceWorkerRegistration: swReg }).then(function (t) {
+            if (t) return fs.doc('tokens/' + uid + '_' + hash(t)).delete().then(function () { return m.deleteToken(); });
+          }).catch(function () {});
+        }
+      } catch (e) {}
+      return tokenDel.then(function () { return auth.signOut(); })
+        .then(function () { return fs.terminate().then(function () { return fs.clearPersistence(); }); })
+        .catch(function () {})
+        .then(function () {
+          try { Object.keys(localStorage).forEach(function (k) { if (/^celaya_/.test(k) && k !== 'celaya_musica') localStorage.removeItem(k); }); } catch (e) {}
+          var clear = window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : Promise.resolve();
+          return clear.catch(function () {});
+        })
+        .then(function () { location.replace('/'); });
+    }
+  };
   window.pushNotify = function (list) {
     if (!ctx || ctx.role !== 'admin') return Promise.resolve();
     return auth.currentUser.getIdToken().then(function (t) {

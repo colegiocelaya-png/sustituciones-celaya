@@ -29,18 +29,28 @@ service cloud.firestore {
       allow update: if isAdmin() || (isAllowed() && resource.data.to == myTid() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
     }
 
-    // Chat de cada día
+    // Chat de cada día: solo quienes sustituyen ese día y la jefatura; mensajes con forma y tamaño controlados
+    function msgOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'tid', 'jefe', 'text', 'ts'])
+        && d.text is string && d.text.size() > 0 && d.text.size() <= 600
+        && d.ts is number && d.jefe is bool;
+    }
     match /chats/{date}/msgs/{m} {
       allow read: if isAdmin() || (isAllowed() && inDay(date));
-      allow create: if isAllowed() && request.resource.data.uid == request.auth.uid
+      allow create: if isAllowed() && msgOk() && request.resource.data.uid == request.auth.uid
         && (isAdmin() || (inDay(date) && request.resource.data.tid == myTid() && request.resource.data.jefe == false));
       allow delete: if isAdmin();
     }
-    match /chats/{date}/seen/{s} { allow read: if isAdmin() || (isAllowed() && inDay(date)); allow write: if isAdmin() || (isAllowed() && s == myTid() && inDay(date)); }
+    match /chats/{date}/seen/{s} {
+      allow read: if isAdmin() || (isAllowed() && inDay(date));
+      allow write: if isAdmin() || (isAllowed() && s == myTid() && inDay(date) && request.resource.data.keys().hasOnly(['ts', 'tid']));
+    }
 
-    // Dispositivos para notificaciones
+    // Dispositivos para notificaciones: cada persona solo toca los suyos
     match /tokens/{t} {
-      allow create, update: if isAllowed() && request.resource.data.uid == request.auth.uid && (isAdmin() || request.resource.data.tid == myTid());
+      allow create: if isAllowed() && request.resource.data.uid == request.auth.uid && (isAdmin() || request.resource.data.tid == myTid());
+      allow update: if isAllowed() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && (isAdmin() || request.resource.data.tid == myTid());
       allow read, delete: if isAllowed() && resource.data.uid == request.auth.uid;
     }
 
