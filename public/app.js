@@ -1180,6 +1180,7 @@ const Panel = {
     el.append(h('p', { class: 'date-label' }, fmtDate(date) + (date === today ? ' · hoy' : '')));
     el.append(greeting());
     if (!S.loaded.days) return el.append(skeleton());
+    { const md = miDia(date); if (md) el.append(md); }
     const day = S.days[date] || { absences: [], subs: [] };
     if (!weekdayKey(date)) el.append(h('p', { class: 'note warn' }, 'Fin de semana: no hay clase.'));
     else if (!day.absences.length) el.append(h('div', { class: 'empty good' }, h('div', { class: 'empty-ico' }, icon('check')), h('h3', null, 'No falta nadie'), h('p', { class: 'muted' }, date === today ? 'Hoy están todos los profesores.' : 'No hay ausencias registradas para este día.')));
