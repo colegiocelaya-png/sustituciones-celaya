@@ -349,6 +349,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .rot-item:not(:hover):not(:focus-within) .rot-edit { display: none; }
 @media (hover: none) { .rot-item .rot-edit { display: flex; } }
 
+/* ---- avisos con movimiento: campana y bocadillo ---- */
+@keyframes ring { 0%, 42%, 100% { transform: rotate(0); } 4% { transform: rotate(20deg); } 9% { transform: rotate(-18deg); } 14% { transform: rotate(15deg); } 19% { transform: rotate(-12deg); } 25% { transform: rotate(8deg); } 31% { transform: rotate(-4deg); } 37% { transform: rotate(2deg); } }
+@keyframes bubble { 0%, 50%, 100% { transform: scale(1) translateY(0); } 57% { transform: scale(1.3) translateY(-3px); } 64% { transform: scale(.94) translateY(0); } 71% { transform: scale(1.18) translateY(-2px); } 80% { transform: scale(1) translateY(0); } }
+@keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(191, 29, 41, .55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(191, 29, 41, 0); } }
+.alert-bell .ico svg { transform-origin: 50% 6%; animation: ring 3.8s ease-in-out infinite; }
+.alert-chat .ico svg { transform-origin: 50% 75%; animation: bubble 3.8s ease-in-out infinite; }
+.alert-bell .badge, .alert-chat .badge { animation: halo 1.9s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .alert-bell .ico svg, .alert-chat .ico svg, .alert-bell .badge, .alert-chat .badge { animation: none; } }
+
 /* ---- animaciones suaves ---- */
 @keyframes pop { 0% { opacity: 0; transform: translateY(10px) scale(.97); } 60% { opacity: 1; transform: translateY(0) scale(1.01); } 100% { transform: none; } }
 @keyframes wob { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-7deg) scale(1.06); } 60% { transform: rotate(5deg) scale(1.04); } }
@@ -1108,8 +1117,41 @@ function refresh(v) {
   v.pending = false;
   v.render();
 }
+/* ---------- avisos del chat (sin leer) ---------- */
+const CHATBG = { unsub: null, date: null, msgs: [], first: true };
+function chatSeenLocal(d) { try { return +localStorage.getItem('celaya_cs_' + d) || 0; } catch (e) { return 0; } }
+function setChatSeenLocal(d, ts) { try { localStorage.setItem('celaya_cs_' + d, String(ts)); } catch (e) {} }
+function chatUnread() {
+  const d = CHATBG.date; if (!d) return 0;
+  const last = chatSeenLocal(d);
+  return CHATBG.msgs.filter((m) => !(m.uid && m.uid === S.uid) && m.ts > last).length;
+}
+function syncChatBg() {
+  const d = todayStr();
+  const day = S.days[d];
+  const ok = !!S.db && !!S.uid && (S.admin || (!!S.me && !!day && (day.subs || []).some((x) => x.subId === S.me)));
+  if (!ok) { if (CHATBG.unsub) { CHATBG.unsub(); CHATBG.unsub = null; } CHATBG.date = null; CHATBG.msgs = []; return; }
+  if (CHATBG.unsub && CHATBG.date === d) return;
+  if (CHATBG.unsub) CHATBG.unsub();
+  CHATBG.date = d; CHATBG.msgs = []; CHATBG.first = true;
+  let q = S.db.collection('chats/' + d + '/msgs').orderBy('ts');
+  if (q.limitToLast) q = q.limitToLast(60);
+  CHATBG.unsub = q.onSnapshot((snap) => {
+    const prev = CHATBG.msgs.length;
+    CHATBG.msgs = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
+    const viewing = S.tab === 'chat' && S.chatDate === d && !Chat.el.hidden;
+    if (viewing && CHATBG.msgs.length) setChatSeenLocal(d, CHATBG.msgs[CHATBG.msgs.length - 1].ts);
+    else if (!CHATBG.first && CHATBG.msgs.length > prev) {
+      const nuevo = CHATBG.msgs[CHATBG.msgs.length - 1];
+      if (!(nuevo.uid && nuevo.uid === S.uid)) toast('Nuevo mensaje en el chat de hoy');
+    }
+    CHATBG.first = false;
+    renderTabs();
+  }, () => {});
+}
 function renderAll() {
   renderHeader();
+  syncChatBg();
   renderTabs();
   if (S.skel) {
     const loading = !S.loaded.school;
@@ -1149,8 +1191,8 @@ function renderTabs() {
   if (!S.tab) S.tab = S.admin ? 'hoy' : 'panel';
   nav.textContent = '';
   for (const [k, label] of tabsList()) {
-    const u = k === 'mis' ? unreadCount() : 0;
-    nav.append(h('button', { class: 'tab' + (S.tab === k ? ' on' : ''), role: 'tab', 'aria-selected': S.tab === k ? 'true' : 'false', onclick: () => go(k) }, icon(TAB_ICONS[k] || 'info'), label, u ? h('span', { class: 'badge' }, u) : null));
+    const u = k === 'mis' ? unreadCount() : k === 'chat' ? chatUnread() : 0;
+    nav.append(h('button', { class: 'tab' + (S.tab === k ? ' on' : '') + (u ? (k === 'chat' ? ' alert-chat' : ' alert-bell') : ''), role: 'tab', 'aria-selected': S.tab === k ? 'true' : 'false', onclick: () => go(k) }, icon(TAB_ICONS[k] || 'info'), label, u ? h('span', { class: 'badge' }, u) : null));
   }
   for (const k in views) views[k].el.hidden = k !== S.tab;
   renderBottomNav();
@@ -1162,8 +1204,8 @@ function renderBottomNav() {
   const all = tabsList();
   const main = all.length <= 5 ? all : all.slice(0, 4), more = all.length <= 5 ? [] : all.slice(4);
   nav.textContent = ''; sheet.textContent = '';
-  const mk = (k, label, ic, on, fn, badge) => h('button', { class: 'bn' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, onclick: fn }, h('span', { class: 'bn-ico' }, icon(ic), badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 'bn-l' }, label));
-  for (const [k, label] of main) nav.append(mk(k, SHORT[k] || label, TAB_ICONS[k], S.tab === k, () => { S.more = false; go(k); }, k === 'mis' ? unreadCount() : 0));
+  const mk = (k, label, ic, on, fn, badge) => h('button', { class: 'bn' + (on ? ' on' : '') + (badge ? (k === 'chat' ? ' alert-chat' : k === 'mis' ? ' alert-bell' : '') : ''), 'aria-current': on ? 'page' : null, onclick: fn }, h('span', { class: 'bn-ico' }, icon(ic), badge ? h('span', { class: 'badge' }, badge) : null), h('span', { class: 'bn-l' }, label));
+  for (const [k, label] of main) nav.append(mk(k, SHORT[k] || label, TAB_ICONS[k], S.tab === k, () => { S.more = false; go(k); }, k === 'mis' ? unreadCount() : k === 'chat' ? chatUnread() : 0));
   if (more.length) {
     const inMore = more.some(([k]) => k === S.tab);
     nav.append(mk('more', 'Más', 'grid', inMore || S.more, () => { S.more = !S.more; renderBottomNav(); }));
@@ -1840,6 +1882,7 @@ const Chat = {
     });
     this.list.scrollTop = this.list.scrollHeight;
     this.markSeen();
+    if (!this.el.hidden && msgs.length && date === CHATBG.date) { const b = chatUnread(); setChatSeenLocal(date, msgs[msgs.length - 1].ts); if (b !== chatUnread()) renderTabs(); }
   },
   markSeen() {
     if (!S.db || !S.chatDate || this.el.hidden || S.canWrite === false) return;
@@ -1857,6 +1900,7 @@ const Chat = {
     if (!text || !S.chatDate) return;
     this.input.value = '';
     S.db.collection('chats/' + S.chatDate + '/msgs').add({ uid: S.uid, tid: S.me, jefe: S.admin, text, ts: Date.now() })
+      .then(() => { if (S.admin && window.pushNotify) { const d = S.chatDate; window.pushNotify(this.participants(d).map((id) => ({ to: id, kind: 'chat', date: d, text: 'Jefatura: ' + text.slice(0, 140) }))).catch(() => {}); } })
       .catch(() => { this.input.value = text; toast('No se pudo enviar el mensaje.', true); });
   }
 };
