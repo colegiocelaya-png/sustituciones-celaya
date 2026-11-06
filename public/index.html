@@ -1181,8 +1181,8 @@ function initials(name) {
   return ((w[0] || '?')[0] + (w.length > 1 ? w[1][0] : '')).toUpperCase();
 }
 // Profesorado con foto (archivos en /avatars/<id>.jpg). Si falla la carga se muestran las iniciales.
-const FOTOS = new Set(['pablo','jesus-canedo','carmen-gordillo','jorge','ana-hernandez','carmen','victoria','gema','andrea','conchi','mar','eli','belen','pilar','natalia','miriam-f','ana-torres','noelia','juanfran','sonia','virginia-amor','miriam-del-castillo','rebeca','ricardo']);
-const FOTOS_V = 18;
+const FOTOS = new Set(['pablo','jesus-canedo','carmen-gordillo','jorge','ana-hernandez','carmen','victoria','gema','andrea','conchi','mar','eli','belen','pilar','natalia','miriam-f','ana-torres','noelia','juanfran','sonia','virginia-amor','miriam-del-castillo','alba','rebeca','ricardo']);
+const FOTOS_V = 19;
 function avatar(id, size, jefe) {
   const T = tById(id), name = jefe ? 'Jefatura' : (T ? T.name : '?');
   let n = 0; for (const ch of String(jefe ? 'jefe' : id)) n = (n * 31 + ch.charCodeAt(0)) % 997;
