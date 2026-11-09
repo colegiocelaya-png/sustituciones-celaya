@@ -48,6 +48,13 @@ service cloud.firestore {
     }
 
     // Dispositivos para notificaciones: cada persona solo toca los suyos
+    match /presence/{mail} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAllowed() && mail == email()
+        && request.resource.data.keys().hasOnly(['ts', 'push'])
+        && request.resource.data.ts is number && request.resource.data.push is bool;
+    }
+
     match /tokens/{t} {
       allow create: if isAllowed() && request.resource.data.uid == request.auth.uid && (isAdmin() || request.resource.data.tid == myTid());
       allow update: if isAllowed() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && (isAdmin() || request.resource.data.tid == myTid());

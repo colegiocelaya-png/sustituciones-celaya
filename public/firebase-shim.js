@@ -211,6 +211,23 @@
     });
   };
 
+  /* ---------- presencia: cada persona anota su último acceso (la jefatura lo ve en Centro) ---------- */
+  var lastPing = 0;
+  window.presenceApi = {
+    ping: function () {
+      if (!ctx || Date.now() - lastPing < 20 * 60 * 1000) return Promise.resolve();
+      lastPing = Date.now();
+      var push = false;
+      try { push = 'Notification' in window && Notification.permission === 'granted'; } catch (e) {}
+      return fs.doc('presence/' + ctx.email).set({ ts: Date.now(), push: push }).catch(function () { lastPing = 0; });
+    },
+    subscribe: function (cb) {
+      return fs.collection('presence').onSnapshot(function (s) {
+        var o = {}; s.docs.forEach(function (d) { o[d.id] = { ts: d.data().ts || 0, push: !!d.data().push }; }); cb(o);
+      }, function () {});
+    }
+  };
+
   /* ---------- lista de correos autorizados ---------- */
   window.accessApi = {
     me: function () { return ctx && ctx.email; },
@@ -232,7 +249,7 @@
       });
       return Promise.all(jobs).then(function () { return jobs.length; });
     },
-    remove: function (email) { return fs.doc('access/' + email).delete(); },
+    remove: function (email) { fs.doc('presence/' + email).delete().catch(function () {}); return fs.doc('access/' + email).delete(); },
     // Liga un correo a un profesor/a concreto (cada persona solo ve sus propios avisos)
     setTid: function (email, tid) { return fs.doc('access/' + email).set({ tid: tid || null }, { merge: true }); },
     // Crea o restablece cuentas con contraseña (la jefatura se las da a cada profesor)

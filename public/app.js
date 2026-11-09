@@ -610,6 +610,8 @@ function setMe(tid) {
   subscribeNotifs();
   renderAll();
 }
+function pingPresence() { try { if (window.presenceApi) window.presenceApi.ping(); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pingPresence(); });
 let unsubN = null;
 function subscribeNotifs() {
   if (window.pushApi && S.me) window.pushApi.sync(S.me);
@@ -1721,7 +1723,10 @@ const Centro = {
     const teachersOnly = list.filter((a) => a.role !== 'admin').map((a) => a.id);
     return h('div', { class: 'card' }, h('h3', null, 'Quién puede entrar'),
       h('p', { class: 'muted small' }, 'Solo estos correos pueden abrir la app. Escribe uno por línea; añade “, jefatura” para dar permisos de edición. Asigna a cada correo su nombre: así cada profesor solo ve sus avisos.'),
+      list.length ? (() => { const P = S.presence || {}, nIn = list.filter((a) => P[a.id]).length, nPush = list.filter((a) => P[a.id] && P[a.id].push).length;
+        return h('p', { class: 'small pres-sum' }, h('b', null, nIn + ' de ' + list.length), ' han entrado en la app · ', h('b', null, nPush), ' con avisos activados. ', h('span', { class: 'muted' }, 'Se actualiza cada vez que alguien abre la app.')); })() : null,
       list.length ? h('div', { class: 'chips col' }, list.map((a) => h('span', { class: 'chip rm' }, a.id, a.role === 'admin' ? h('span', { class: 'role-tag hl' }, 'jefatura') : null,
+        (() => { const q = (S.presence || {})[a.id]; return q ? h('span', { class: 'pres ok', title: 'Último acceso' }, timeAgo(q.ts), q.push ? h('span', { class: 'pres-bell', title: 'Avisos activados' }, icon('bell')) : null) : h('span', { class: 'pres no' }, 'Aún no ha entrado'); })(),
         h('select', { class: 'tidsel', 'aria-label': 'Profesor/a de ' + a.id, onchange: (ev) => window.accessApi.setTid(a.id, ev.target.value).then(() => toast('Asignado'), () => toast('No se pudo asignar.', true)) },
           h('option', { value: '' }, '— sin asignar —'), sortedTeachers().map((t) => h('option', { value: t.id, selected: t.id === a.tid }, t.name))),
         h('button', { class: 'btn ghost sm', title: 'Crea o restablece su contraseña', onclick: (ev) => gen([a.id], ev.currentTarget) }, 'Contraseña'),
@@ -1809,6 +1814,7 @@ async function boot() {
   S.myTid = S.user && S.user.tid ? await S.user.tid() : null;
   // con cuentas propias (Firebase), el profesorado queda ligado a su ficha y no puede elegir otra
   S.locked = !!window.accessApi && !S.admin;
+  pingPresence();
   if (S.locked || S.myTid) S.me = S.myTid || null;
   else { try { S.me = localStorage.getItem(LS_ME) || null; } catch (e) {} }
   renderAll();
@@ -1846,6 +1852,7 @@ async function boot() {
     }, () => {});
   }
   if (window.accessApi && S.admin) window.accessApi.subscribe((l) => { S.access = l; if (views.centro.built) refresh(views.centro); });
+  if (window.presenceApi && S.admin) window.presenceApi.subscribe((o) => { S.presence = o; if (views.centro.built) refresh(views.centro); });
   subscribeNotifs();
 }
 boot();
