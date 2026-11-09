@@ -1671,7 +1671,10 @@ const SM = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { S.smWeek = weekStart(todayStr()); $('#main').append(this.el); },
   render() {
-    const el = this.el; el.textContent = '';
+    const el = this.el;
+    // al marcar una casilla la tabla se repinta: se conserva dónde estaba el desplazamiento
+    const oldSc = el.querySelector('.scroll'), keepX = oldSc ? oldSc.scrollLeft : 0, keepY = window.scrollY, keepWk = this._wk;
+    el.textContent = '';
     const wk = S.smWeek, doc = S.sm[wk] || { days: {} }, days = doc.days || {};
     const go2 = (d) => { S.smWeek = weekStart(d); refresh(SM); };
     el.append(h('div', { class: 'toolbar' },
@@ -1691,7 +1694,10 @@ const SM = {
         WD.map((d) => h('td', null, h('input', { type: 'checkbox', class: 'smchk', 'aria-label': T.name + ' ' + WDN[d], checked: (days[d] || []).includes(T.id), onchange: (e) => saveSM(wk, T.id, d, e.target.checked) })))));
     }
     tbl.append(body);
-    el.append(h('div', { class: 'card' }, h('div', { class: 'scroll' }, tbl)));
+    const sc = h('div', { class: 'scroll' }, tbl);
+    el.append(h('div', { class: 'card' }, sc));
+    if (keepWk === wk) { sc.scrollLeft = keepX; window.scrollTo(0, keepY); }
+    this._wk = wk;
   }
 };
 views.sm = SM;
