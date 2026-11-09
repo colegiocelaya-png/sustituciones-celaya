@@ -170,7 +170,9 @@ function assign(day, date, ctx, resetAll) {
   for (const n of needs) {
     const o = old.get(n.key);
     const keep = !resetAll && o && o.subId && teachers.some((t) => t.id === o.subId) && !isAbsent(day, o.subId, n.slot) && !(n.strike && !(ctx.sm || []).includes(o.subId));
-    if (keep) {
+    // una asignación automática antigua que incumple el horario de un profesor de plan específico (Belén) se vuelve a repartir
+    const planBad = (() => { if (!o || !o.subId || o.manual || !PLAN_ESPECIFICO.includes(o.subId)) return false; const T = teachers.find((t) => t.id === o.subId), c = n.slot === 'R' ? null : cellOf(T, wd, n.slot); return !(c && (c.t === 'l' || (c.t === 'a' && c.g && n.place && norm(n.place).includes(norm(c.g))))); })();
+    if (keep && !planBad) {
       out.push({ ...n, subId: o.subId, tier: o.tier || 0, fb: !!o.fb, manual: !!o.manual });
       mark(n.slot, o.subId);
       if (roleOf(o.subId) === 'directivo') dirToday[o.subId] = (dirToday[o.subId] || 0) + 1;
@@ -190,6 +192,7 @@ function assign(day, date, ctx, resetAll) {
     const t = c ? c.t : 'n';
     if (slot === 'R') {
       if (onPatio(ctx.patio, wd, T.id)) return false;
+      if (PLAN_ESPECIFICO.includes(T.id)) return false;
       if (tier === 1) return isPrim(T);
       if (tier === 3) return isSpecial(T.role);
       return false; // el equipo directivo no cubre patio
@@ -651,6 +654,30 @@ function setMe(tid) {
 }
 function pingPresence() { try { if (window.presenceApi) window.presenceApi.ping(); } catch (e) {} }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pingPresence(); });
+// Corrige asignaciones automáticas antiguas que incumplen el horario de Belén (plan de apoyo): solo hoy y días futuros
+const _fixDone = new Set();
+function fixPlanEspecifico() {
+  if (!S.loaded.school || !S.school.teachers.length) return;
+  const today = todayStr();
+  for (const date in S.days) {
+    if (date < today || !weekdayKey(date)) continue;
+    const day = S.days[date], wd = weekdayKey(date);
+    const bad = (day.subs || []).some((x) => {
+      if (!x.subId || x.manual || !PLAN_ESPECIFICO.includes(x.subId)) return false;
+      const T = tById(x.subId), c = x.slot === 'R' ? null : cellOf(T, wd, x.slot);
+      return !(c && (c.t === 'l' || (c.t === 'a' && c.g && x.place && norm(x.place).includes(norm(c.g)))));
+    });
+    const sig = date + '|' + JSON.stringify((day.subs || []).map((x) => x.key + x.subId));
+    if (!bad || _fixDone.has(sig)) continue;
+    _fixDone.add(sig);
+    enqueue(async () => {
+      const old = JSON.parse(JSON.stringify(S.days[date])), d2 = cloneDay(date);
+      d2.subs = assign(d2, date, ctxFor(date), false);
+      const n = await saveDay(date, d2, old);
+      toast('Belén se ha quitado de ' + fmtShort(date) + ' donde tenía clase · ' + plural(n, 'aviso enviado', 'avisos enviados'));
+    });
+  }
+}
 let unsubN = null;
 function subscribeNotifs() {
   if (window.pushApi && S.me) window.pushApi.sync(S.me);
@@ -2009,6 +2036,7 @@ async function boot() {
   S.db.collection('days').onSnapshot((snap) => {
     S.days = {}; snap.docs.forEach((d) => { S.days[d.id] = d.data(); });
     S.loaded.days = true; renderAll();
+    if (S.admin) fixPlanEspecifico();
     if (views.chat.built) refresh(views.chat);
     if (views.panel.built) refresh(views.panel);
   }, () => {});
