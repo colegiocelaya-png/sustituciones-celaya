@@ -1317,7 +1317,7 @@ const Chat = {
     this.sel = h('select', { id: 'chat-dia', 'aria-label': 'Día', onchange: (e) => { S.chatDate = e.target.value; this.watch(); this.render(); } });
     this.who = h('div', { class: 'chips' });
     this.list = h('div', { class: 'msgs', role: 'log', 'aria-live': 'polite' });
-    this.input = h('input', { type: 'text', id: 'chat-msg', placeholder: 'Escribe a quienes sustituís hoy…', 'aria-label': 'Mensaje para el chat del día', autocomplete: 'off', maxlength: 600 });
+    this.input = h('input', { type: 'text', id: 'chat-msg', placeholder: S.admin ? 'Escribe a quienes sustituyen hoy…' : 'Escribe al jefe de estudios…', 'aria-label': S.admin ? 'Mensaje para el chat del día' : 'Mensaje para el jefe de estudios', autocomplete: 'off', maxlength: 600 });
     this.send = h('button', { class: 'btn primary', type: 'submit' }, icon('send'), 'Enviar');
     this.note = h('p', { class: 'note small' });
     this.el.append(
