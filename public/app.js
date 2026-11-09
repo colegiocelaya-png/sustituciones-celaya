@@ -16,9 +16,12 @@ const isSpecial = (r) => r === 'pt' || r === 'al';
 const isPrim = (T) => T.role === 'tutor' || T.role === 'especialista';
 // grupo de referencia de un tutor: el que más horas tiene en su horario
 function homeGroup(T) {
-  if (!T || (T.role !== 'tutor' && T.role !== 'infantil')) return null;
-  const m = {}; for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) m[c.g] = (m[c.g] || 0) + 1; }
+  if (!T || !['tutor', 'infantil', 'especialista'].includes(T.role)) return null;
+  const m = {}; let tot = 0;
+  for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) { m[c.g] = (m[c.g] || 0) + 1; tot++; } }
   let best = null; for (const g in m) if (!best || m[g] > m[best]) best = g;
+  // un especialista solo tiene grupo de referencia si más de la mitad de sus clases son de ese grupo (p. ej. un tutor que da inglés)
+  if (best && T.role === 'especialista' && m[best] < tot / 2) return null;
   return best;
 }
 // Profesores que se quedan libres porque su grupo se va de excursión: { id: ['2','5'] }
@@ -239,7 +242,7 @@ function assign(day, date, ctx, resetAll) {
       } else out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
       continue;
     }
-    const absentNow = new Set((day.absences || []).filter((a) => a.slots.length && roleOf(a.tid) !== 'infantil').map((a) => a.tid)).size; // profesores distintos que faltan ese día
+    const absentNow = new Set(needs.filter((x) => roleOf(x.absentId) !== 'infantil').map((x) => x.absentId)).size; // profesores distintos que necesitan sustituto ese día
     const start = 1;
     // Fuentes permitidas según cuántos profesores faltan ese día (en este orden):
     //  1 ausente: libre, coordinación, directivo (no se quitan apoyos)
@@ -1024,12 +1027,13 @@ function excImpact(date, e) {
   // tutores cuyos cursos se quedan sin un profesor que se va de excursión: { tutorId: [{ who, g, slots }] }
   const wd = weekdayKey(date), res = {};
   if (!wd) return res;
-  const cnt = {};
-  for (const T of S.school.teachers) {
-    if (T.role !== 'tutor' && T.role !== 'infantil') continue;
-    for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) { cnt[c.g] = cnt[c.g] || {}; cnt[c.g][T.id] = (cnt[c.g][T.id] || 0) + 1; } }
-  }
-  const tutorsOf = (g) => { const m = cnt[g] || {}, mx = Math.max(0, ...Object.values(m)); return Object.keys(m).filter((id) => m[id] === mx); };
+  const tutorsOf = (g) => {
+    const own = S.school.teachers.filter((T) => homeGroup(T) === g).map((T) => T.id);
+    if (own.length) return own;
+    const cnt = {};
+    for (const T of S.school.teachers) for (const k in T.sched || {}) { const c = T.sched[k]; if (T.role === 'tutor' && c && c.t === 'c' && c.g === g) cnt[T.id] = (cnt[T.id] || 0) + 1; }
+    const mx = Math.max(0, ...Object.values(cnt)); return Object.keys(cnt).filter((id) => cnt[id] === mx);
+  };
   for (const tid of e.tids || []) {
     const T = tById(tid); if (!T) continue;
     const by = {};
