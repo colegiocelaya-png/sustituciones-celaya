@@ -211,7 +211,7 @@ function assign(day, date, ctx, resetAll) {
       } else out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
       continue;
     }
-    const absentNow = (day.absences || []).filter((a) => a.slots.includes(n.slot) && roleOf(a.tid) !== 'infantil').length;
+    const absentNow = new Set((day.absences || []).filter((a) => a.slots.length && roleOf(a.tid) !== 'infantil').map((a) => a.tid)).size; // profesores distintos que faltan ese día
     const start = 1;
     // Fuentes permitidas según cuántos profesores faltan a la vez (en este orden):
     //  1 ausente: libre, coordinación, directivo (no se quitan apoyos)
@@ -1735,7 +1735,7 @@ const Centro = {
     el.append(h('h2', { class: 'cap' }, 'Centro'));
     // criterio
     el.append(h('div', { class: 'card' }, h('h3', null, 'Cómo reparte la app las sustituciones'),
-      h('p', { class: 'muted small' }, 'En cada franja se cuenta cuántos profesores faltan a la vez y se cubre con estas fuentes, en este orden:'),
+      h('p', { class: 'muted small' }, 'Se cuenta cuántos profesores faltan ese día (aunque sea en horas distintas) y se cubre con estas fuentes, en este orden:'),
       h('ol', { class: 'steps' },
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
