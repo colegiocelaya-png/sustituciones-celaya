@@ -169,12 +169,12 @@
     enable: function (tid) {
       return Notification.requestPermission().then(function (p) {
         if (p !== 'granted') return { ok: false };
-        return saveToken(tid).then(function (ok) { return { ok: ok }; });
+        return saveToken(tid).then(function (ok) { if (ok && window.presenceApi) window.presenceApi.ping(true); return { ok: ok }; });
       }).catch(function () { return { ok: false }; });
     },
     sync: function (tid) {
       if (!tid || !supported() || Notification.permission !== 'granted') return Promise.resolve();
-      return saveToken(tid).catch(function () {});
+      return saveToken(tid).then(function (ok) { if (ok && window.presenceApi) window.presenceApi.ping(); }).catch(function () {});
     }
   };
   /* ---------- cerrar sesión: borra los datos guardados en este dispositivo ---------- */
@@ -212,14 +212,16 @@
   };
 
   /* ---------- presencia: cada persona anota su último acceso (la jefatura lo ve en Centro) ---------- */
-  var lastPing = 0;
+  var lastPing = 0, lastPush = null;
   window.presenceApi = {
-    ping: function () {
-      if (!ctx || Date.now() - lastPing < 20 * 60 * 1000) return Promise.resolve();
-      lastPing = Date.now();
+    ping: function (force) {
+      if (!ctx) return Promise.resolve();
       var push = false;
       try { push = 'Notification' in window && Notification.permission === 'granted'; } catch (e) {}
-      return fs.doc('presence/' + ctx.email).set({ ts: Date.now(), push: push }).catch(function () { lastPing = 0; });
+      // se escribe cada 20 min, o de inmediato si cambia el estado de los avisos
+      if (!force && push === lastPush && Date.now() - lastPing < 20 * 60 * 1000) return Promise.resolve();
+      lastPing = Date.now(); lastPush = push;
+      return fs.doc('presence/' + ctx.email).set({ ts: Date.now(), push: push }).catch(function () { lastPing = 0; lastPush = null; });
     },
     subscribe: function (cb) {
       return fs.collection('presence').onSnapshot(function (s) {
