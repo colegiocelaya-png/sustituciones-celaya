@@ -13,6 +13,7 @@ const DEFAULT_SESSIONS = {
 
 const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const isSpecial = (r) => r === 'pt' || r === 'al';
+const PLAN_ESPECIFICO = ['belen']; // no se les quita el apoyo para sustituir, salvo si su grupo se queda sin profesor
 const isPrim = (T) => T.role === 'tutor' || T.role === 'especialista';
 // grupo de referencia de un tutor: el que más horas tiene en su horario
 function homeGroup(T) {
@@ -195,7 +196,12 @@ function assign(day, date, ctx, resetAll) {
     }
     if (tier === 10) return !!(freed[T.id] && freed[T.id].has(slot)) && t === 'c';
     if (tier === 1) return isPrim(T) && t === 'l';
-    if (tier === 2) return isPrim(T) && t === 'a';
+    if (tier === 2) {
+      if (!(isPrim(T) && t === 'a')) return false;
+      // profesorado de un plan específico (apoyo de matemáticas): solo sustituye en su apoyo si el grupo al que apoya se queda sin profesor
+      if (PLAN_ESPECIFICO.includes(T.id)) return !!(c && c.g && need && need.place && norm(need.place).includes(norm(c.g)));
+      return true;
+    }
     if (tier === 6) return isPrim(T) && t === 'o';
     if (tier === 7) return isPrim(T) && t === 's';
     if (tier === 3) return isSpecial(T.role) && t !== 'n';
@@ -1917,6 +1923,7 @@ const Centro = {
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
+        h('li', null, h('b', null, 'Plan de apoyo de matemáticas (Belén): '), 'se la trata como una profesora más y se respeta su horario. Solo sustituye en sus horas libres o, en una hora de apoyo, si el grupo al que apoya se queda sin su profesor.'),
         h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias que no sean de excursión.'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
         h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. El equipo directivo no cubre el patio. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
