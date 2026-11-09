@@ -702,7 +702,7 @@ function renderHeader() {
   if (window.authApi) w.append(h('button', { class: 'btn ghost sm no-print', type: 'button', 'aria-label': 'Cerrar sesión', title: 'Cerrar sesión', onclick: () => { if (confirm('¿Cerrar sesión en este dispositivo?\n\nDejará de recibir avisos hasta que vuelvas a entrar.')) window.authApi.signOut(); } }, icon('out')));
 }
 function unreadCount() { return S.notifs.filter((n) => !n.read).length; }
-const TAB_ICONS = { hoy: 'home', panel: 'calendar', mis: 'bell', chat: 'chat', patios: 'sun', prof: 'users', sm: 'shield', centro: 'school' };
+const TAB_ICONS = { hoy: 'home', panel: 'calendar', mis: 'bell', chat: 'chat', patios: 'sun', prof: 'users', exc: 'pin', sm: 'shield', centro: 'school' };
 function tabsList() {
   const t = [];
   if (S.admin) t.push(['hoy', 'Hoy']);
@@ -711,6 +711,7 @@ function tabsList() {
   t.push(['chat', 'Comunicación']);
   t.push(['patios', 'Patios']);
   t.push(['prof', S.admin ? 'Profesorado' : 'Horarios']);
+  if (S.admin) t.push(['exc', 'Excursiones']);
   if (S.admin) t.push(['sm', 'Servicios mínimos']);
   if (S.admin) t.push(['centro', 'Centro']);
   return t;
@@ -726,7 +727,7 @@ function renderTabs() {
   for (const k in views) views[k].el.hidden = k !== S.tab;
   renderBottomNav();
 }
-const SHORT = { hoy: 'Hoy', panel: 'Panel', mis: 'Mi turno', chat: 'Chat', patios: 'Patios', prof: 'Horarios', sm: 'Huelga', centro: 'Centro' };
+const SHORT = { hoy: 'Hoy', panel: 'Panel', mis: 'Mi turno', chat: 'Chat', patios: 'Patios', prof: 'Horarios', exc: 'Excursión', sm: 'Huelga', centro: 'Centro' };
 function renderBottomNav() {
   const nav = $('#bnav'), sheet = $('#sheet');
   if (!nav) return;
@@ -769,6 +770,7 @@ function cellState(T, wd, slot) {
   return (isSpecial(T.role) ? 'sesión ' + ROLES[T.role] : 'en clase') + (c.g ? ' ' + c.g : '');
 }
 const ICONS = {
+  pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   sound: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
   mute: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/>',
@@ -981,6 +983,143 @@ function serpentinas() {
 }
 
 /* =====================================================  HOY  */
+
+/* ---------- Excursiones / salidas complementarias ---------- */
+function homeGroup(T) {
+  // grupo de referencia de un tutor: el que más horas tiene en su horario
+  if (!T || (T.role !== 'tutor' && T.role !== 'infantil')) return null;
+  const m = {}; for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) m[c.g] = (m[c.g] || 0) + 1; }
+  let best = null; for (const g in m) if (!best || m[g] > m[best]) best = g;
+  return best;
+}
+// franjas que hay que cubrir: todas, salvo las clases que un tutor da a su propio grupo (ese grupo también va a la excursión)
+function excSlots(date, tid) {
+  const T = tById(tid), wd = weekdayKey(date), g = homeGroup(T);
+  return SLOT_ORDER.filter((sl) => { if (sl === 'R' || !g) return true; const c = cellOf(T, wd, sl); return !(c && c.t === 'c' && c.g === g); });
+}
+function excImpact(date, e) {
+  // tutores cuyos cursos se quedan sin un profesor que se va de excursión: { tutorId: [{ who, g, slots }] }
+  const wd = weekdayKey(date), res = {};
+  if (!wd) return res;
+  const cnt = {};
+  for (const T of S.school.teachers) {
+    if (T.role !== 'tutor' && T.role !== 'infantil') continue;
+    for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) { cnt[c.g] = cnt[c.g] || {}; cnt[c.g][T.id] = (cnt[c.g][T.id] || 0) + 1; } }
+  }
+  const tutorsOf = (g) => { const m = cnt[g] || {}, mx = Math.max(0, ...Object.values(m)); return Object.keys(m).filter((id) => m[id] === mx); };
+  for (const tid of e.tids || []) {
+    const T = tById(tid); if (!T) continue;
+    const by = {};
+    for (const sl of ['1', '2', '3', '4', '5', '6']) {
+      const c = cellOf(T, wd, sl);
+      if (!(c && c.t === 'c' && c.g)) continue;
+      for (const tu of tutorsOf(c.g)) { if ((e.tids || []).includes(tu) || tu === tid) continue; const k = tu + '|' + c.g; (by[k] = by[k] || { tu, g: c.g, slots: [] }).slots.push(sl); }
+    }
+    for (const k in by) (res[by[k].tu] = res[by[k].tu] || []).push({ who: tid, g: by[k].g, slots: by[k].slots });
+  }
+  return res;
+}
+const horasTxt = (sl) => sl.map((x) => x + 'ª').join(', ') + (sl.length === 1 ? ' hora' : ' horas');
+function excTexto(date, e, tid) {
+  const when = date === todayStr() ? 'Hoy' : fmtShort(date);
+  const lugar = e.title ? ' (' + e.title + ')' : '';
+  if ((e.tids || []).includes(tid)) return when + ' tienes salida complementaria fuera del centro' + lugar + '.';
+  const imp = (excImpact(date, e)[tid] || []);
+  const quien = imp.map((i) => tName(i.who));
+  const nombres = quien.length ? [...new Set(quien)] : (e.tids || []).map(tName);
+  const lista = nombres.join(' y ');
+  const gr = imp.map((i) => 'Tu grupo ' + i.g + ' se queda sin ' + tName(i.who).split(' ')[0] + ' en ' + horasTxt(i.slots) + '.').join(' ');
+  return when + ' ' + lista + ' tiene' + (nombres.length > 1 ? 'n' : '') + ' salida complementaria fuera del centro' + lugar + '. ' + gr;
+}
+function excCards(date) {
+  const day = S.days[date], list = (day && day.exc) || [];
+  if (!list.length || !S.loaded.school) return null;
+  const when = date === todayStr() ? 'Hoy' : fmtShort(date);
+  return h('div', { class: 'exc-wrap no-print' }, list.map((e) => {
+    const imp = S.me ? (excImpact(date, e)[S.me] || []) : [];
+    const mine = S.me && (e.tids || []).includes(S.me);
+    return h('div', { class: 'card exc' + (imp.length || mine ? ' mine' : '') },
+      h('div', { class: 'exc-head' }, icon('pin'), h('b', null, 'Excursión' + (e.title ? ' · ' + e.title : '')), h('span', { class: 'muted small' }, when)),
+      h('p', { class: 'small' }, 'Van: ', h('b', null, (e.tids || []).map(tName).join(', ') || '—'), '.'),
+      imp.length || mine ? h('p', { class: 'exc-me' }, excTexto(date, e, S.me)) : null);
+  }));
+}
+async function exNotify(date, e, cancel) {
+  const out = [], ids = new Set(e.tids || []), imp = excImpact(date, e);
+  Object.keys(imp).forEach((t) => ids.add(t));
+  for (const to of ids) {
+    const text = cancel ? 'Se ha cancelado la salida complementaria' + (e.title ? ' (' + e.title + ')' : '') + ' del ' + fmtShort(date) + '.' : excTexto(date, e, to);
+    out.push({ to, date, kind: 'exc', text, ts: Date.now(), read: false });
+  }
+  for (const n of out) await S.db.collection('notifs').add(n);
+  if (window.pushNotify && out.length) window.pushNotify(out).catch(() => {});
+  return out.length;
+}
+function addExcursion(date, title, tids) {
+  return enqueue(async () => {
+    const old = S.days[date] ? JSON.parse(JSON.stringify(S.days[date])) : null;
+    const day = cloneDay(date);
+    const e = { id: rid(), title, tids };
+    day.exc = [...(day.exc || []), e];
+    for (const tid of tids) {
+      const ex = day.absences.find((a) => a.tid === tid);
+      if (ex) ex.slots = [...new Set([...ex.slots, ...excSlots(date, tid)])];
+      else day.absences.push({ id: rid(), tid, slots: excSlots(date, tid), nota: '', exc: e.id });
+    }
+    day.subs = assign(day, date, { ...ctxFor(date), strike: strikeIds(date).slice() }, false);
+    await saveDay(date, day, old);
+    const n = await exNotify(date, e, false);
+    toast('Excursión guardada · ' + plural(n, 'aviso enviado', 'avisos enviados') + (day.subs.filter((s) => !s.subId).length ? ' · hay franjas sin cubrir' : ''));
+  });
+}
+function removeExcursion(date, id) {
+  return enqueue(async () => {
+    const old = JSON.parse(JSON.stringify(S.days[date]));
+    const day = cloneDay(date);
+    const e = (day.exc || []).find((x) => x.id === id); if (!e) return;
+    const imp = excImpact(date, e);
+    day.exc = day.exc.filter((x) => x.id !== id);
+    day.absences = day.absences.filter((a) => a.exc !== id);
+    const strike = strikeIds(date).filter((i) => day.absences.some((a) => a.id === i));
+    day.subs = assign({ ...day, subs: day.subs.filter((s) => day.absences.some((a) => a.id === s.absId)) }, date, { ...ctxFor(date), strike }, false);
+    if (strike.length !== strikeIds(date).length) await savePriv(date, strike);
+    await saveDay(date, day, old);
+    await exNotify(date, e, true);
+    toast('Excursión cancelada y avisos enviados');
+  });
+}
+const Exc = {
+  el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
+  build() { this.sel = new Set(); this.date = todayStr(); $('#main').append(this.el); },
+  render() {
+    const el = this.el; el.textContent = '';
+    if (!S.school.teachers.length) return el.append(empty('No hay profesorado cargado', 'Importa antes los horarios en la pestaña Profesorado.', null, 'users'));
+    const title = h('input', { type: 'text', id: 'exc-lugar', placeholder: 'Lugar o nombre de la salida (opcional)', maxlength: 80, value: this._title || '', oninput: (e) => { this._title = e.target.value; } });
+    const dateIn = h('input', { type: 'date', id: 'exc-fecha', value: this.date, onchange: (e) => { if (e.target.value) { this.date = e.target.value; this.render(); } } });
+    const chips = h('div', { class: 'chips picker' }, sortedTeachers().map((t) => h('button', { type: 'button', class: 'chip pick' + (this.sel.has(t.id) ? ' on' : ''), 'aria-pressed': this.sel.has(t.id) ? 'true' : 'false', onclick: () => { this.sel.has(t.id) ? this.sel.delete(t.id) : this.sel.add(t.id); this.render(); } }, avatar(t.id, 'sm'), t.name)));
+    const go = () => {
+      if (!this.sel.size) return toast('Elige al menos un profesor.', true);
+      if (!weekdayKey(this.date)) return toast('Esa fecha es fin de semana.', true);
+      const tids = [...this.sel], t = (this._title || '').trim();
+      this.sel = new Set(); this._title = '';
+      addExcursion(this.date, t, tids);
+    };
+    el.append(h('h2', { class: 'cap' }, 'Excursiones y salidas'),
+      h('p', { class: 'muted small' }, 'Marca quién sale. La app trata sus clases como una ausencia (busca sustitutos con las reglas de siempre, salvo PT y AL, que no se sustituyen, y las clases que un tutor da a su propio grupo, que también sale), avisa a todo el profesorado en su Panel y manda un aviso a los tutores de los cursos que se quedan sin ese profesor.'),
+      h('div', { class: 'card' }, h('h3', null, 'Nueva excursión'),
+        h('div', { class: 'field' }, h('span', null, 'Fecha'), dateIn), h('div', { class: 'field' }, h('span', null, 'Lugar'), title),
+        h('div', { class: 'field' }, h('span', null, 'Profesores que van (' + this.sel.size + ')'), chips),
+        h('div', { class: 'row-end' }, h('button', { class: 'btn primary', onclick: go }, icon('plus'), 'Guardar y avisar'))));
+    const today = todayStr(), all = [];
+    for (const d in S.days) for (const e of S.days[d].exc || []) all.push({ d, e });
+    const up = all.filter((x) => x.d >= today).sort((a, b) => a.d.localeCompare(b.d)), past = all.filter((x) => x.d < today).sort((a, b) => b.d.localeCompare(a.d)).slice(0, 8);
+    const row = ({ d, e }) => h('div', { class: 'exc-row' }, h('div', null, h('b', null, fmtDate(d) + (e.title ? ' · ' + e.title : '')), h('div', { class: 'small muted' }, (e.tids || []).map(tName).join(', '))),
+      d >= today ? h('button', { class: 'btn ghost sm', onclick: () => { if (confirm('¿Cancelar esta excursión? Se quitan las ausencias y se avisa de la cancelación.')) removeExcursion(d, e.id); } }, 'Cancelar') : null);
+    el.append(h('div', { class: 'card' }, h('h3', null, 'Próximas'), up.length ? up.map(row) : h('p', { class: 'muted' }, 'No hay excursiones previstas.')));
+    if (past.length) el.append(h('details', { class: 'card' }, h('summary', null, 'Anteriores'), past.map(row)));
+  }
+};
+views.exc = Exc;
 const Hoy = {
   el: h('section', { class: 'view', hidden: true }), built: false,
   build() {
@@ -1051,7 +1190,7 @@ const Hoy = {
     const date = S.date, wd = weekdayKey(date);
     this.dateIn.value = date;
     this.dateLabel.textContent = fmtDate(date) + (date === todayStr() ? ' · hoy' : '');
-    this.mine.textContent = ''; { const md = miDia(date); if (md) this.mine.append(md); }
+    this.mine.textContent = ''; { const md = miDia(date); if (md) this.mine.append(md); const ex = excCards(date); if (ex) this.mine.append(ex); }
     const prev = this.selT.value;
     this.selT.textContent = '';
     this.selT.append(h('option', { value: '' }, '— Elegir —'), sortedTeachers().map((t) => h('option', { value: t.id }, t.name + ' · ' + ROLES[t.role])));
@@ -1112,7 +1251,7 @@ const Hoy = {
       const full = a.slots.length >= SLOT_ORDER.length;
       this.absWrap.append(h('div', { class: 'row' },
         h('div', { class: 'grow' },
-          h('div', { class: 'who-line' }, avatar(a.tid), h('b', null, tName(a.tid)), h('span', { class: 'role-tag' }, T ? ROLES[T.role] : ''), isStrike ? h('span', { class: 'pill tier t3' }, 'Huelga') : null),
+          h('div', { class: 'who-line' }, avatar(a.tid), h('b', null, tName(a.tid)), a.exc ? h('span', { class: 'pill accent' }, 'Excursión') : null, h('span', { class: 'role-tag' }, T ? ROLES[T.role] : ''), isStrike ? h('span', { class: 'pill tier t3' }, 'Huelga') : null),
           h('div', { class: 'muted small' }, full ? 'Todo el día' : a.slots.map((s) => (s === 'R' ? 'Recreo' : s + 'ª')).join(', '),
             needs ? ' · ' + needs + ' franja' + (needs === 1 ? '' : 's') + ' que cubrir' : ' · no necesita sustitución'),
           notasOf(date)[a.id] ? h('div', { class: 'small' }, 'Nota: ' + notasOf(date)[a.id]) : null),
@@ -1182,7 +1321,7 @@ const Panel = {
     el.append(h('p', { class: 'date-label' }, fmtDate(date) + (date === today ? ' · hoy' : '')));
     el.append(greeting());
     if (!S.loaded.days) return el.append(skeleton());
-    { const md = miDia(date); if (md) el.append(md); }
+    { const md = miDia(date); if (md) el.append(md); const ex = excCards(date); if (ex) el.append(ex); }
     const day = S.days[date] || { absences: [], subs: [] };
     if (!weekdayKey(date)) el.append(h('p', { class: 'note warn' }, 'Fin de semana: no hay clase.'));
     else if (!day.absences.length) el.append(h('div', { class: 'empty good' }, h('div', { class: 'empty-ico' }, icon('check')), h('h3', null, 'No falta nadie'), h('p', { class: 'muted' }, date === today ? 'Hoy están todos los profesores.' : 'No hay ausencias registradas para este día.')));
@@ -1197,7 +1336,7 @@ const Panel = {
           const lost = T && isSpecial(T.role) ? a.slots.filter((s) => s !== 'R').map((s) => ({ s, c: cellOf(T, wd, s) })).filter((l) => l.c && l.c.t === 'c') : [];
           return h('div', { class: 'row sub' },
             h('div', { class: 'grow' },
-              h('div', { class: 'who-line' }, avatar(a.tid), h('b', null, tName(a.tid)), h('span', { class: 'role-tag' + (T && isSpecial(T.role) ? ' hl' : '') }, T ? ROLES[T.role] : '')),
+              h('div', { class: 'who-line' }, avatar(a.tid), h('b', null, tName(a.tid)), a.exc ? h('span', { class: 'pill accent' }, 'Excursión') : null, h('span', { class: 'role-tag' + (T && isSpecial(T.role) ? ' hl' : '') }, T ? ROLES[T.role] : '')),
               h('div', { class: 'muted small' }, full ? 'Todo el día' : a.slots.map((s) => (s === 'R' ? 'Recreo' : s + 'ª')).join(', '))),
             h('div', { class: 'cover' }, subs.length ? subs.map((s) => h('div', { class: 'small' + (s.subId && s.subId === S.me ? ' mine-line' : '') },
               h('span', { class: 'time' }, (s.slot === 'R' ? 'Recreo' : s.slot + 'ª') + ' '), s.subId ? tName(s.subId) + (s.subId === S.me ? ' (tú)' : '') : h('b', { class: 'bad-t' }, 'sin cubrir'), h('span', { class: 'muted' }, ' · ' + placeTxt(s))))
