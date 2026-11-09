@@ -14,6 +14,31 @@ const DEFAULT_SESSIONS = {
 const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const isSpecial = (r) => r === 'pt' || r === 'al';
 const isPrim = (T) => T.role === 'tutor' || T.role === 'especialista';
+// grupo de referencia de un tutor: el que más horas tiene en su horario
+function homeGroup(T) {
+  if (!T || (T.role !== 'tutor' && T.role !== 'infantil')) return null;
+  const m = {}; for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) m[c.g] = (m[c.g] || 0) + 1; }
+  let best = null; for (const g in m) if (!best || m[g] > m[best]) best = g;
+  return best;
+}
+// Profesores que se quedan libres porque su grupo se va de excursión: { id: ['2','5'] }
+function freedByExcursion(day, wd, teachers) {
+  const out = {};
+  for (const e of (day && day.exc) || []) {
+    for (const tid of e.tids || []) {
+      const g = homeGroup(teachers.find((t) => t.id === tid));
+      if (!g) continue;
+      for (const U of teachers) {
+        if ((e.tids || []).includes(U.id) || !isPrim(U)) continue;
+        for (const sl of ['1', '2', '3', '4', '5', '6']) {
+          const c = U.sched && U.sched[wd + sl];
+          if (c && c.t === 'c' && c.g === g) (out[U.id] = out[U.id] || new Set()).add(sl);
+        }
+      }
+    }
+  }
+  return out;
+}
 const isInfGroup = (g) => /infantil|\binf\b|\b[345]\s?(años|anos|a)\b|\bi[345]\b/i.test(norm(g || ''));
 
 function weekdayKey(date) {
@@ -150,6 +175,8 @@ function assign(day, date, ctx, resetAll) {
   // los reservados a mano que quedaron fuera de "needs" no cuentan; el resto se reparte
   todo.sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
 
+  const freed = freedByExcursion(day, wd, teachers);
+  const isExcAbs = (n) => { const a = (day.absences || []).find((x) => x.id === n.absId); return !!(a && a.exc); };
   const candidates = (tier, slot, need) => teachers.filter((T) => {
     if (need && need.strike && !(ctx.sm || []).includes(T.id)) return false;
     if (used[slot] && used[slot].has(T.id)) return false;
@@ -163,6 +190,7 @@ function assign(day, date, ctx, resetAll) {
       if (tier === 3) return isSpecial(T.role);
       return false; // el equipo directivo no cubre patio
     }
+    if (tier === 10) return !!(freed[T.id] && freed[T.id].has(slot)) && t === 'c';
     if (tier === 1) return isPrim(T) && t === 'l';
     if (tier === 2) return isPrim(T) && t === 'a';
     if (tier === 6) return isPrim(T) && t === 'o';
@@ -213,11 +241,13 @@ function assign(day, date, ctx, resetAll) {
     }
     const absentNow = new Set((day.absences || []).filter((a) => a.slots.length && roleOf(a.tid) !== 'infantil').map((a) => a.tid)).size; // profesores distintos que faltan ese día
     const start = 1;
-    // Fuentes permitidas según cuántos profesores faltan a la vez (en este orden):
+    // Fuentes permitidas según cuántos profesores faltan ese día (en este orden):
     //  1 ausente: libre, coordinación, directivo (no se quitan apoyos)
     //  2 ausentes: libre, coordinación, apoyo (y speaking), directivo
     //  3 o más: libre, coordinación, apoyo (y speaking), PT/AL, directivo
     const order = absentNow <= 1 ? [1, 6, 4, 9] : absentNow === 2 ? [1, 6, 2, 7, 4, 9] : [1, 6, 2, 7, 3, 4, 9];
+    // quien se queda libre porque su grupo está de excursión cubre primero las ausencias que no son de excursión
+    if (!isExcAbs(n) && n.slot !== 'R' && Object.keys(freed).length) order.unshift(10);
     let picked = null, pickedTier = 0;
     for (const tier of order) {
       const list = candidates(tier, n.slot, n);
@@ -236,7 +266,7 @@ function assign(day, date, ctx, resetAll) {
     if (picked) {
       mark(n.slot, picked.id);
       if (picked.role === 'directivo') dirToday[picked.id] = (dirToday[picked.id] || 0) + 1;
-      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier, fb: pickedTier === 9, manual: false });
+      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier === 10 ? 1 : pickedTier, fb: pickedTier === 9, manual: false });
     } else {
       out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
     }
@@ -985,13 +1015,6 @@ function serpentinas() {
 /* =====================================================  HOY  */
 
 /* ---------- Excursiones / salidas complementarias ---------- */
-function homeGroup(T) {
-  // grupo de referencia de un tutor: el que más horas tiene en su horario
-  if (!T || (T.role !== 'tutor' && T.role !== 'infantil')) return null;
-  const m = {}; for (const k in T.sched || {}) { const c = T.sched[k]; if (c && c.t === 'c' && c.g) m[c.g] = (m[c.g] || 0) + 1; }
-  let best = null; for (const g in m) if (!best || m[g] > m[best]) best = g;
-  return best;
-}
 // franjas que hay que cubrir: todas, salvo las clases que un tutor da a su propio grupo (ese grupo también va a la excursión)
 function excSlots(date, tid) {
   const T = tById(tid), wd = weekdayKey(date), g = homeGroup(T);
@@ -1890,6 +1913,7 @@ const Centro = {
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
+        h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias que no sean de excursión.'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
         h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. El equipo directivo no cubre el patio. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
       h('p', { class: 'muted small' }, 'Huelga: cuando una ausencia se marca como huelga, solo la pueden cubrir los profesores marcados como servicios mínimos ese día, con el mismo orden de criterios. El motivo solo lo ves tú.'),
