@@ -219,8 +219,13 @@ function assign(day, date, ctx, resetAll) {
   for (const n of todo) {
     if (roleOf(n.absentId) === 'infantil') {
       // Infantil: 1 ausente -> profesora de apoyo de infantil; 2 o más -> PT y AL (mejor quien ya da clase en infantil en esa franja)
-      const infN = (day.absences || []).filter((a) => a.slots.includes(n.slot) && roleOf(a.tid) === 'infantil').length;
-      const kinds = infN >= 2 ? ['pt', 'apoyoinf', 'dir', 'dir9'] : ['apoyoinf', 'pt', 'dir', 'dir9'];
+      // Faltan varias tutoras de infantil a la vez: la profesora de apoyo de infantil cubre el curso más bajo
+      // y el equipo de apoyo (PT y AL) cubre el resto de franjas
+      const abs = [...new Map(todo.concat(out).filter((x) => x.slot === n.slot && roleOf(x.absentId) === 'infantil').map((x) => [x.absentId, x])).values()];
+      const infN = abs.length;
+      const curso = (x) => { const m = String(x.place || '').match(/[345]/); return (m ? m[0] : '9') + '|' + String(x.place || ''); };
+      const lowest = infN >= 2 ? abs.slice().sort((a, b) => curso(a).localeCompare(curso(b)))[0].absentId : null;
+      const kinds = infN < 2 ? ['apoyoinf', 'pt', 'dir', 'dir9'] : n.absentId === lowest ? ['apoyoinf', 'pt', 'dir', 'dir9'] : ['pt', 'dir', 'dir9'];
       let got = null;
       for (const kind of kinds) {
         const list = teachers.filter((T) => {
@@ -1386,7 +1391,7 @@ const Hoy = {
       if (!subs.length) continue;
       const n = day.absences.filter((a) => a.slots.includes(slot)).length;
       const infN = day.absences.filter((x) => x.slots.includes(slot) && (tById(x.tid) || {}).role === 'infantil').length;
-      const crit = (infN ? (infN >= 2 ? 'Infantil: PT y AL' : 'Infantil: apoyo de infantil') + ' · ' : '') + (n <= 1 ? 'Criterio: libres, coordinación, directivo' : n === 2 ? 'Criterio: libres, coordinación, apoyos, directivo' : 'Criterio: libres, coordinación, apoyos, PT/AL, directivo');
+      const crit = (infN ? (infN >= 2 ? 'Infantil: apoyo de infantil (curso más bajo) y PT/AL' : 'Infantil: apoyo de infantil') + ' · ' : '') + (n <= 1 ? 'Criterio: libres, coordinación, directivo' : n === 2 ? 'Criterio: libres, coordinación, apoyos, directivo' : 'Criterio: libres, coordinación, apoyos, PT/AL, directivo');
       this.subWrap.append(h('div', { class: 'slot-group' },
         h('div', { class: 'slot-head' }, h('b', null, slotLabel(slot)), h('span', { class: 'time' }, sessTime(slot)), h('span', { class: 'muted small' }, n + ' ausente' + (n === 1 ? '' : 's') + ' · ' + crit)),
         subs.map((s) => {
@@ -2017,7 +2022,7 @@ const Centro = {
         h('li', null, h('b', null, 'Speaking: '), 'si a la clase que se queda sin profesora le toca desdoble de speaking, la primera opción es siempre la profesora de speaking de ese grupo en esa hora.'),
         h('li', null, h('b', null, 'Plan de apoyo de matemáticas (Belén): '), 'se la trata como una profesora más y se respeta su horario. Solo sustituye en sus horas libres o, en una hora de apoyo, si el grupo al que apoya se queda sin su profesor.'),
         h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias que no sean de excursión.'),
-        h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
+        h('li', null, h('b', null, 'Infantil: '), 'si falta una tutora de infantil, Ana Hernández (apoyo de infantil) cubre todas sus franjas. Si faltan 2 o más a la vez, Ana cubre el curso más bajo de los que faltan y el equipo de apoyo (PT y AL) cubre las franjas del resto, mejor quien en esa franja ya esté dando clase en infantil. Las horas en que dan clase las especialistas de inglés, música o religión no necesitan sustituto.'),
         h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. El equipo directivo no cubre el patio. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
       h('p', { class: 'muted small' }, 'Huelga: cuando una ausencia se marca como huelga, solo la pueden cubrir los profesores marcados como servicios mínimos ese día, con el mismo orden de criterios. El motivo solo lo ves tú.'),
       h('p', { class: 'muted small' }, 'Si en ninguno de los niveles permitidos queda nadie, el equipo directivo la cubre siempre, aunque supere el máximo diario (se marca como “criterio ampliado”). Entre el resto, elige a quien menos ha sustituido en el pasado en proporción a sus huecos y apoyos semanales, así el profesorado de primaria, que tiene más, sustituye más de forma natural y los especialistas (inglés, música, educación física) no quedan cargados. Los recreos se cubren con quien no tenga turno de patio ese día.')));
