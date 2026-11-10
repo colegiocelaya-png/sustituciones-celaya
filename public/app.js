@@ -84,12 +84,14 @@ function needsFor(day, wd, teachers, patio, strike) {
   for (const a of day.absences || []) {
     const T = teachers.find((t) => t.id === a.tid);
     if (!T) continue;
+    // si el profesor sale de excursión, las clases que da a su propio grupo no se sustituyen: ese grupo va con él
+    const hg = (day.exc || []).some((e) => (e.tids || []).includes(T.id)) ? homeGroup(T) : null;
     for (const s of a.slots) {
       if (s === 'R') {
         if (onPatio(patio, wd, T.id)) out.push({ key: a.id + '_R', absId: a.id, absentId: T.id, slot: 'R', place: (patio && patio.turnsInf && (patio.turnsInf[wd] || []).includes(T.id)) ? 'Patio de infantil' : 'Patio', strike: strike.includes(a.id) });
       } else {
         const c = cellOf(T, wd, s);
-        if (c && c.t === 'c' && !isSpecial(T.role)) {
+        if (c && c.t === 'c' && !isSpecial(T.role) && !(hg && c.g === hg)) {
           out.push({ key: a.id + '_' + s, absId: a.id, absentId: T.id, slot: s, place: c.g || ('Clase de ' + T.name), subject: c.m || '', strike: strike.includes(a.id) });
         }
       }
@@ -662,11 +664,17 @@ function fixPlanEspecifico() {
   for (const date in S.days) {
     if (date < today || !weekdayKey(date)) continue;
     const day = S.days[date], wd = weekdayKey(date);
-    const bad = (day.subs || []).some((x) => {
+    const bad2 = (day.exc || []).length && (day.subs || []).some((x) => {
+      if (!x.subId || x.manual || x.slot === 'R') return false;
+      const T = tById(x.absentId); if (!T || !(day.exc || []).some((e) => (e.tids || []).includes(T.id))) return false;
+      const g = homeGroup(T), c = cellOf(T, wd, x.slot); return !!(g && c && c.t === 'c' && c.g === g);
+    });
+    const bad1 = (day.subs || []).some((x) => {
       if (!x.subId || x.manual || !PLAN_ESPECIFICO.includes(x.subId)) return false;
       const T = tById(x.subId), c = x.slot === 'R' ? null : cellOf(T, wd, x.slot);
       return !(c && (c.t === 'l' || (c.t === 'a' && c.g && x.place && norm(x.place).includes(norm(c.g)))));
     });
+    const bad = bad1 || bad2;
     const sig = date + '|' + JSON.stringify((day.subs || []).map((x) => x.key + x.subId));
     if (!bad || _fixDone.has(sig)) continue;
     _fixDone.add(sig);
@@ -674,7 +682,7 @@ function fixPlanEspecifico() {
       const old = JSON.parse(JSON.stringify(S.days[date])), d2 = cloneDay(date);
       d2.subs = assign(d2, date, ctxFor(date), false);
       const n = await saveDay(date, d2, old);
-      toast('Belén se ha quitado de ' + fmtShort(date) + ' donde tenía clase · ' + plural(n, 'aviso enviado', 'avisos enviados'));
+      toast('Reparto corregido el ' + fmtShort(date) + ' · ' + plural(n, 'aviso enviado', 'avisos enviados'));
     });
   }
 }
