@@ -1028,8 +1028,9 @@ function miDia(date) {
   const wd = weekdayKey(date), today = todayStr(), isToday = date === today;
   const day = S.days[date] || { absences: [], subs: [] };
   const mine = (day.subs || []).filter((x) => x.subId === S.me).sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
-  const patio = onPatio(patioForDate(S.patios[date.slice(0, 7)], date), wd, S.me);
   const absent = (day.absences || []).some((a) => a.tid === S.me);
+  // si faltas ese día (o estás de huelga) el patio ya no es tuyo: lo cubre otra persona
+  const patio = onPatio(patioForDate(S.patios[date.slice(0, 7)], date), wd, S.me) && !(day.absences || []).some((a) => a.tid === S.me && a.slots.includes('R'));
   const sm = strikeIds(date).length && smFor(date).includes(S.me);
   const first = tName(S.me).split(' ')[0];
   const when = isToday ? 'Hoy' : 'Ese día';
