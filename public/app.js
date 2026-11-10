@@ -725,6 +725,19 @@ function fixPlanEspecifico() {
     });
   }
 }
+// Corrección única: «Pablo M.» (tutor de 3ºA) se había cargado como Pilar en los turnos de patio de primaria
+function fixPatioPablo() {
+  for (const month in S.patios) {
+    const doc = S.patios[month];
+    if (doc.fixPablo || !doc.dates) continue;
+    const need = Object.values(doc.dates).some((v) => v && (v.prim || []).includes('pilar') && !(v.prim || []).includes('pablo'));
+    if (!need) { if (S.patios[month]) savePatio(month, (d) => { d.fixPablo = 1; }); continue; }
+    savePatio(month, (d) => {
+      for (const k in d.dates || {}) { const v = d.dates[k]; if (v && (v.prim || []).includes('pilar') && !v.prim.includes('pablo')) v.prim = v.prim.map((x) => (x === 'pilar' ? 'pablo' : x)); }
+      d.fixPablo = 1;
+    });
+  }
+}
 let unsubN = null;
 function subscribeNotifs() {
   if (window.pushApi && (S.me || S.admin)) window.pushApi.sync(S.me || '_admin');
@@ -2115,6 +2128,7 @@ async function boot() {
   S.db.collection('patios').onSnapshot((snap) => {
     S.patios = {}; snap.docs.forEach((d) => { S.patios[d.id] = d.data(); });
     S.loaded.patios = true; renderAll();
+    if (S.admin) fixPatioPablo();
   }, () => {});
   S.db.collection('sm').onSnapshot((snap) => {
     S.sm = {}; snap.docs.forEach((d) => { S.sm[d.id] = d.data(); });

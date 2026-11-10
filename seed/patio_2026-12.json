@@ -1,1 +1,252 @@
-{"dates": {"2026-12-01": {"prim": ["pilar", "sergio", "ricardo", "conchi", "miriam-f", "eli"], "inf": ["ana-hernandez", "miriam-del-castillo", "sonia", "jesus-canedo", "pilar", "susana-ruiz"]}, "2026-12-02": {"prim": ["merche", "alba", "noelia", "mar", "gema", "natalia"], "inf": ["andrea", "virginia-amor", "ana-torres", "carmen-gordillo", "miriam-vela"]}, "2026-12-03": {"prim": ["eli", "pilar", "sergio", "ricardo", "conchi", "miriam-f"], "inf": ["miriam-del-castillo", "sonia", "jesus-canedo", "pilar", "susana-ruiz", "ana-hernandez"]}, "2026-12-04": {"prim": ["natalia", "merche", "alba", "noelia", "mar", "gema"], "inf": ["virginia-amor", "ana-torres", "carmen-gordillo", "miriam-vela", "andrea"]}, "2026-12-09": {"prim": ["miriam-f", "eli", "pilar", "sergio", "ricardo", "conchi"], "inf": ["sonia", "jesus-canedo", "pilar", "susana-ruiz", "ana-hernandez", "miriam-del-castillo"]}, "2026-12-10": {"prim": ["gema", "natalia", "merche", "alba", "noelia", "mar"], "inf": ["ana-torres", "carmen-gordillo", "miriam-vela", "andrea", "virginia-amor"]}, "2026-12-11": {"prim": ["conchi", "miriam-f", "eli", "pilar", "sergio", "ricardo"], "inf": ["jesus-canedo", "pilar", "susana-ruiz", "ana-hernandez", "miriam-del-castillo", "sonia"]}, "2026-12-14": {"prim": ["mar", "gema", "natalia", "merche", "alba", "noelia"], "inf": ["carmen-gordillo", "miriam-vela", "andrea", "virginia-amor", "ana-torres"]}, "2026-12-15": {"prim": ["ricardo", "conchi", "miriam-f", "eli", "pilar", "sergio"], "inf": ["susana-ruiz", "ana-hernandez", "miriam-del-castillo", "sonia", "jesus-canedo", "pilar"]}, "2026-12-16": {"prim": ["noelia", "mar", "gema", "natalia", "merche", "alba"], "inf": ["miriam-vela", "andrea", "virginia-amor", "ana-torres", "carmen-gordillo"]}, "2026-12-17": {"prim": ["sergio", "ricardo", "conchi", "miriam-f", "eli", "pilar"], "inf": ["ana-hernandez", "miriam-del-castillo", "sonia", "jesus-canedo", "pilar", "susana-ruiz"]}, "2026-12-18": {"prim": ["alba", "noelia", "mar", "gema", "natalia", "merche"], "inf": ["andrea", "virginia-amor", "ana-torres", "carmen-gordillo", "miriam-vela"]}, "2026-12-21": {"prim": ["pilar", "sergio", "ricardo", "conchi", "miriam-f", "eli"], "inf": ["miriam-del-castillo", "sonia", "jesus-canedo", "pilar", "susana-ruiz", "ana-hernandez"]}, "2026-12-22": {"todos": true, "prim": [], "inf": []}}, "turns": {"L": [], "M": [], "X": [], "J": [], "V": []}, "turnsInf": {"L": [], "M": [], "X": [], "J": [], "V": []}}
+{
+ "dates": {
+  "2026-12-01": {
+   "prim": [
+    "pablo",
+    "sergio",
+    "ricardo",
+    "conchi",
+    "miriam-f",
+    "eli"
+   ],
+   "inf": [
+    "ana-hernandez",
+    "miriam-del-castillo",
+    "sonia",
+    "jesus-canedo",
+    "pilar",
+    "susana-ruiz"
+   ]
+  },
+  "2026-12-02": {
+   "prim": [
+    "merche",
+    "alba",
+    "noelia",
+    "mar",
+    "gema",
+    "natalia"
+   ],
+   "inf": [
+    "andrea",
+    "virginia-amor",
+    "ana-torres",
+    "carmen-gordillo",
+    "miriam-vela"
+   ]
+  },
+  "2026-12-03": {
+   "prim": [
+    "eli",
+    "pablo",
+    "sergio",
+    "ricardo",
+    "conchi",
+    "miriam-f"
+   ],
+   "inf": [
+    "miriam-del-castillo",
+    "sonia",
+    "jesus-canedo",
+    "pilar",
+    "susana-ruiz",
+    "ana-hernandez"
+   ]
+  },
+  "2026-12-04": {
+   "prim": [
+    "natalia",
+    "merche",
+    "alba",
+    "noelia",
+    "mar",
+    "gema"
+   ],
+   "inf": [
+    "virginia-amor",
+    "ana-torres",
+    "carmen-gordillo",
+    "miriam-vela",
+    "andrea"
+   ]
+  },
+  "2026-12-09": {
+   "prim": [
+    "miriam-f",
+    "eli",
+    "pablo",
+    "sergio",
+    "ricardo",
+    "conchi"
+   ],
+   "inf": [
+    "sonia",
+    "jesus-canedo",
+    "pilar",
+    "susana-ruiz",
+    "ana-hernandez",
+    "miriam-del-castillo"
+   ]
+  },
+  "2026-12-10": {
+   "prim": [
+    "gema",
+    "natalia",
+    "merche",
+    "alba",
+    "noelia",
+    "mar"
+   ],
+   "inf": [
+    "ana-torres",
+    "carmen-gordillo",
+    "miriam-vela",
+    "andrea",
+    "virginia-amor"
+   ]
+  },
+  "2026-12-11": {
+   "prim": [
+    "conchi",
+    "miriam-f",
+    "eli",
+    "pablo",
+    "sergio",
+    "ricardo"
+   ],
+   "inf": [
+    "jesus-canedo",
+    "pilar",
+    "susana-ruiz",
+    "ana-hernandez",
+    "miriam-del-castillo",
+    "sonia"
+   ]
+  },
+  "2026-12-14": {
+   "prim": [
+    "mar",
+    "gema",
+    "natalia",
+    "merche",
+    "alba",
+    "noelia"
+   ],
+   "inf": [
+    "carmen-gordillo",
+    "miriam-vela",
+    "andrea",
+    "virginia-amor",
+    "ana-torres"
+   ]
+  },
+  "2026-12-15": {
+   "prim": [
+    "ricardo",
+    "conchi",
+    "miriam-f",
+    "eli",
+    "pablo",
+    "sergio"
+   ],
+   "inf": [
+    "susana-ruiz",
+    "ana-hernandez",
+    "miriam-del-castillo",
+    "sonia",
+    "jesus-canedo",
+    "pilar"
+   ]
+  },
+  "2026-12-16": {
+   "prim": [
+    "noelia",
+    "mar",
+    "gema",
+    "natalia",
+    "merche",
+    "alba"
+   ],
+   "inf": [
+    "miriam-vela",
+    "andrea",
+    "virginia-amor",
+    "ana-torres",
+    "carmen-gordillo"
+   ]
+  },
+  "2026-12-17": {
+   "prim": [
+    "sergio",
+    "ricardo",
+    "conchi",
+    "miriam-f",
+    "eli",
+    "pablo"
+   ],
+   "inf": [
+    "ana-hernandez",
+    "miriam-del-castillo",
+    "sonia",
+    "jesus-canedo",
+    "pilar",
+    "susana-ruiz"
+   ]
+  },
+  "2026-12-18": {
+   "prim": [
+    "alba",
+    "noelia",
+    "mar",
+    "gema",
+    "natalia",
+    "merche"
+   ],
+   "inf": [
+    "andrea",
+    "virginia-amor",
+    "ana-torres",
+    "carmen-gordillo",
+    "miriam-vela"
+   ]
+  },
+  "2026-12-21": {
+   "prim": [
+    "pablo",
+    "sergio",
+    "ricardo",
+    "conchi",
+    "miriam-f",
+    "eli"
+   ],
+   "inf": [
+    "miriam-del-castillo",
+    "sonia",
+    "jesus-canedo",
+    "pilar",
+    "susana-ruiz",
+    "ana-hernandez"
+   ]
+  },
+  "2026-12-22": {
+   "todos": true,
+   "prim": [],
+   "inf": []
+  }
+ },
+ "turns": {
+  "L": [],
+  "M": [],
+  "X": [],
+  "J": [],
+  "V": []
+ },
+ "turnsInf": {
+  "L": [],
+  "M": [],
+  "X": [],
+  "J": [],
+  "V": []
+ },
+ "fixPablo": 1
+}
