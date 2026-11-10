@@ -201,7 +201,9 @@
     }
   };
   window.pushNotify = function (list) {
-    if (!ctx || ctx.role !== 'admin') return Promise.resolve();
+    if (!ctx) return Promise.resolve();
+    if (ctx.role !== 'admin') list = list.filter(function (n) { return n.kind === 'chat-jefe'; }).slice(0, 1); // el profesorado solo puede avisar a jefatura de un mensaje de chat
+    if (!list.length) return Promise.resolve();
     return auth.currentUser.getIdToken().then(function (t) {
       return fetch('/api/push', {
         method: 'POST',

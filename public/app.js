@@ -722,7 +722,7 @@ function fixPlanEspecifico() {
 }
 let unsubN = null;
 function subscribeNotifs() {
-  if (window.pushApi && S.me) window.pushApi.sync(S.me);
+  if (window.pushApi && (S.me || S.admin)) window.pushApi.sync(S.me || '_admin');
   if (unsubN) { unsubN(); unsubN = null; }
   S.notifs = [];
   if (!S.me || !S.db) return;
@@ -1687,7 +1687,7 @@ const Chat = {
     if (!text || !S.chatDate) return;
     this.input.value = '';
     S.db.collection('chats/' + S.chatDate + '/msgs').add({ uid: S.uid, tid: S.me, jefe: S.admin, text, ts: Date.now() })
-      .then(() => { if (S.admin && window.pushNotify) { const d = S.chatDate; window.pushNotify(this.participants(d).map((id) => ({ to: id, kind: 'chat', date: d, text: 'Jefatura: ' + text.slice(0, 140) }))).catch(() => {}); } })
+      .then(() => { if (!S.admin && window.pushNotify) { const d = S.chatDate; window.pushNotify([{ to: '_jefatura', kind: 'chat-jefe', date: d, text: tName(S.me) + ': ' + text.slice(0, 140) }]).catch(() => {}); } if (S.admin && window.pushNotify) { const d = S.chatDate; window.pushNotify(this.participants(d).map((id) => ({ to: id, kind: 'chat', date: d, text: 'Jefatura: ' + text.slice(0, 140) }))).catch(() => {}); } })
       .catch(() => { this.input.value = text; toast('No se pudo enviar el mensaje.', true); });
   }
 };
@@ -1962,6 +1962,13 @@ views.sm = SM;
 const Centro = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { $('#main').append(this.el); },
+  adminPushCard() {
+    const st = window.pushApi.status();
+    if (st === 'granted') return h('div', { class: 'empty good slim' }, h('div', { class: 'empty-ico' }, icon('bell')), h('div', null, h('b', null, 'Avisos de jefatura activados en este dispositivo'), h('p', { class: 'muted small' }, 'Te llegará una notificación cuando un profesor escriba en el chat.')));
+    const msg = { 'ios-install': 'En iPhone, primero añade esta página a la pantalla de inicio y ábrela desde ese icono.', unsupported: 'Este navegador no permite avisos. Prueba con Chrome o instala la página en la pantalla de inicio.', denied: 'Has bloqueado las notificaciones. Permítelas para esta página en los ajustes del navegador o del móvil.', default: 'Recibe un aviso en este dispositivo cuando un profesor te escriba en el chat.' }[st];
+    return h('div', { class: 'card pushcard' }, h('div', { class: 'who-line' }, h('div', { class: 'empty-ico', style: 'width:44px;height:44px;font-size:22px;margin:0' }, icon('bell')), h('div', { class: 'grow' }, h('b', null, 'Avisos de jefatura en el móvil'), h('p', { class: 'muted small', style: 'margin:2px 0 0' }, msg))),
+      st === 'default' ? h('div', { class: 'row-end' }, h('button', { class: 'btn primary', onclick: async () => { const r = await window.pushApi.enable(S.me || '_admin'); toast(r.ok ? 'Avisos activados' : 'No se han podido activar los avisos', !r.ok); refresh(Centro); } }, icon('bell'), 'Activar avisos')) : null);
+  },
   accessCard() {
     const list = (S.access || []).slice().sort((a, b) => (a.role === b.role ? a.id.localeCompare(b.id) : a.role === 'admin' ? -1 : 1));
     const ta = h('textarea', { rows: 4, 'aria-label': 'Correos a añadir', placeholder: 'maria@colegio.es\njuan@colegio.es\ndirectora@colegio.es, jefatura' });
@@ -2019,6 +2026,7 @@ const Centro = {
     const times = h('div', { class: 'times' }, SLOT_ORDER.map((s) => h('label', { class: 'field' }, h('span', null, slotLabel(s)),
       h('input', { type: 'text', value: sessTime(s), 'aria-label': 'Horario ' + slotLabel(s), onchange: (e) => saveSchool((x) => { x.sessions = x.sessions || {}; x.sessions[s] = e.target.value.trim(); }) }))));
     const mkNum = (id, lbl, val, f) => h('label', { class: 'field short' }, h('span', null, lbl), h('input', { type: 'number', id, min: 0, max: 20, value: val, onchange: (e) => { const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)); saveSchool((x) => { x[f] = v; }); } }));
+    if (window.pushApi && S.admin) el.append(this.adminPushCard());
     if (window.accessApi) el.append(this.accessCard());
     el.append(h('div', { class: 'card' }, h('h3', null, 'Patios'), h('div', { class: 'row-wrap' }, mkNum('patio-prim', 'Profesores por día en el patio de primaria', S.school.patioPrim || 6, 'patioPrim'), mkNum('patio-inf', 'Profesores por día en el patio de infantil', S.school.patioInf || 5, 'patioInf'))));
     el.append(h('div', { class: 'card' }, h('h3', null, 'Horario de sesiones'), times,
