@@ -15,6 +15,8 @@ const DEFAULT_SESSIONS = {
 
 const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const isSpecial = (r) => r === 'pt' || r === 'al';
+const RELIGION = 'carmen-gordillo', AE_NO = ['2ºA', '2ºB', '3ºA', '3ºB'];
+const isAE = (n) => !!(n && /atenci[oó]n educativa/i.test(n.subject || '') && !AE_NO.some((g) => norm(n.place || '').includes(norm(g))));
 const PLAN_ESPECIFICO = ['belen']; // no se les quita el apoyo para sustituir, salvo si su grupo se queda sin profesor
 const isPrim = (T) => T.role === 'tutor' || T.role === 'especialista';
 // grupo de referencia de un tutor: el que más horas tiene en su horario
@@ -201,6 +203,7 @@ function assign(day, date, ctx, resetAll) {
       if (tier === 3) return isSpecial(T.role);
       return false; // el equipo directivo no cubre patio
     }
+    if (tier === 12) return !!(T.id === RELIGION && isAE(need));
     if (tier === 11) return !!(isPrim(T) && t === 's' && c && c.g && need && need.place && norm(need.place).includes(norm(c.g)));
     if (tier === 10) return !!(freed[T.id] && freed[T.id].has(slot)) && t === 'c';
     if (tier === 1) return isPrim(T) && t === 'l';
@@ -272,6 +275,8 @@ function assign(day, date, ctx, resetAll) {
     if (!isExcAbs(n) && n.slot !== 'R' && Object.keys(freed).length) order.unshift(10);
     // si la clase que queda sin profesor tiene desdoble de speaking, lo cubre siempre en primer lugar la profesora de speaking de ese grupo
     if (n.slot !== 'R') order.unshift(11);
+    // atención educativa (AE): la profesora de religión la cubre en primer lugar, salvo en 2ºA, 2ºB, 3ºA y 3ºB
+    if (n.slot !== 'R' && isAE(n)) order.unshift(12);
     let picked = null, pickedTier = 0;
     for (const tier of order) {
       const list = candidates(tier, n.slot, n);
@@ -290,7 +295,7 @@ function assign(day, date, ctx, resetAll) {
     if (picked) {
       mark(n.slot, picked.id);
       if (picked.role === 'directivo') dirToday[picked.id] = (dirToday[picked.id] || 0) + 1;
-      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier === 10 ? 1 : pickedTier === 11 ? 7 : pickedTier, fb: pickedTier === 9, manual: false });
+      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier === 10 || pickedTier === 12 ? 1 : pickedTier === 11 ? 7 : pickedTier, fb: pickedTier === 9, manual: false });
     } else {
       out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
     }
@@ -2056,6 +2061,7 @@ const Centro = {
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
+        h('li', null, h('b', null, 'Atención educativa (AE): '), 'si falta un profesor en una hora de AE, la primera opción es Carmen (religión), salvo en 2ºA, 2ºB, 3ºA y 3ºB.'),
         h('li', null, h('b', null, 'Speaking: '), 'si a la clase que se queda sin profesora le toca desdoble de speaking, la primera opción es siempre la profesora de speaking de ese grupo en esa hora.'),
         h('li', null, h('b', null, 'Plan de apoyo de matemáticas (Belén): '), 'se la trata como una profesora más y se respeta su horario. Solo sustituye en sus horas libres o, en una hora de apoyo, si el grupo al que apoya se queda sin su profesor.'),
         h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias que no sean de excursión.'),
