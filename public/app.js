@@ -1978,6 +1978,27 @@ const SM = {
 views.sm = SM;
 
 /* =====================================================  CENTRO  */
+/* ---------- Centro: patios cubiertos por cada profesor ---------- */
+function patiosCubiertosCard() {
+  const px = S.school.patioExtra || { desde: PATIO_DESDE, base: PATIO_BASE_DEFAULT }, base = px.base || {}, desde = px.desde || PATIO_DESDE;
+  const led = patioLedger(ctxFor(todayStr()), '');
+  const fechas = {};
+  for (const d in S.days) { if (d < desde) continue; for (const x of S.days[d].subs || []) if (x.slot === 'R' && x.subId) (fechas[x.subId] = fechas[x.subId] || []).push({ d, place: x.place || 'Patio' }); }
+  const fm = (d) => (d ? d.slice(8) + '/' + d.slice(5, 7) : '—');
+  const rows = S.school.teachers.filter((t) => t.role !== 'directivo' || (led[t.id] || {}).n).map((t) => ({ t, n: (led[t.id] || {}).n || 0, last: (led[t.id] || {}).last || '', app: (fechas[t.id] || []).length, hist: (base[t.id] || {}).n || 0 }))
+    .sort((a, b) => b.n - a.n || a.t.name.localeCompare(b.t.name, 'es'));
+  const max = Math.max(1, ...rows.map((r) => r.n)), total = rows.reduce((s, r) => s + r.n, 0);
+  return h('div', { class: 'card pcub no-print' },
+    h('div', { class: 'card-head' }, h('h3', null, 'Patios cubiertos por cada profesor'), h('span', { class: 'pill' }, total + ' en total')),
+    h('p', { class: 'muted small' }, 'Patios extra que ha cubierto cada profesor este curso: el historial anterior más los que se han repartido en la app desde el ' + fm(desde) + '. Toca un nombre para ver los días.'),
+    h('div', { class: 'pcub-list' }, rows.map((r) => h('details', { class: 'pcub-item' },
+      h('summary', { class: 'pcub-row' }, avatar(r.t.id, 'sm'), h('span', { class: 'pcub-name' }, r.t.name),
+        h('span', { class: 'pcub-bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + Math.round((r.n / max) * 100) + '%' })),
+        h('b', { class: 'pcub-n' }, r.n)),
+      h('div', { class: 'pcub-det small muted' },
+        r.n ? 'Último: ' + fm(r.last) + ' · ' + r.hist + ' de historial + ' + r.app + ' en la app' : 'Todavía no ha cubierto ningún patio extra.',
+        (fechas[r.t.id] || []).length ? h('div', { class: 'pcub-dates' }, fechas[r.t.id].sort((a, b) => a.d.localeCompare(b.d)).map((f) => h('span', { class: 'pill' }, fm(f.d) + (/infantil/i.test(f.place) ? ' · infantil' : '')))) : null)))));
+}
 const Centro = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { $('#main').append(this.el); },
@@ -2046,6 +2067,7 @@ const Centro = {
       h('input', { type: 'text', value: sessTime(s), 'aria-label': 'Horario ' + slotLabel(s), onchange: (e) => saveSchool((x) => { x.sessions = x.sessions || {}; x.sessions[s] = e.target.value.trim(); }) }))));
     const mkNum = (id, lbl, val, f) => h('label', { class: 'field short' }, h('span', null, lbl), h('input', { type: 'number', id, min: 0, max: 20, value: val, onchange: (e) => { const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)); saveSchool((x) => { x[f] = v; }); } }));
     if (window.pushApi && S.admin) el.append(this.adminPushCard());
+    el.append(patiosCubiertosCard());
     if (window.accessApi) el.append(this.accessCard());
     el.append(h('div', { class: 'card' }, h('h3', null, 'Patios'), h('div', { class: 'row-wrap' }, mkNum('patio-prim', 'Profesores por día en el patio de primaria', S.school.patioPrim || 6, 'patioPrim'), mkNum('patio-inf', 'Profesores por día en el patio de infantil', S.school.patioInf || 5, 'patioInf'))));
     el.append(h('div', { class: 'card' }, h('h3', null, 'Horario de sesiones'), times,
