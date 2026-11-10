@@ -199,6 +199,7 @@ function assign(day, date, ctx, resetAll) {
       if (tier === 3) return isSpecial(T.role);
       return false; // el equipo directivo no cubre patio
     }
+    if (tier === 11) return !!(isPrim(T) && t === 's' && c && c.g && need && need.place && norm(need.place).includes(norm(c.g)));
     if (tier === 10) return !!(freed[T.id] && freed[T.id].has(slot)) && t === 'c';
     if (tier === 1) return isPrim(T) && t === 'l';
     if (tier === 2) {
@@ -262,6 +263,8 @@ function assign(day, date, ctx, resetAll) {
     const order = absentNow <= 1 ? [1, 6, 4, 9] : absentNow === 2 ? [1, 6, 2, 7, 4, 9] : [1, 6, 2, 7, 3, 4, 9];
     // quien se queda libre porque su grupo está de excursión cubre primero las ausencias que no son de excursión
     if (!isExcAbs(n) && n.slot !== 'R' && Object.keys(freed).length) order.unshift(10);
+    // si la clase que queda sin profesor tiene desdoble de speaking, lo cubre siempre en primer lugar la profesora de speaking de ese grupo
+    if (n.slot !== 'R') order.unshift(11);
     let picked = null, pickedTier = 0;
     for (const tier of order) {
       const list = candidates(tier, n.slot, n);
@@ -280,7 +283,7 @@ function assign(day, date, ctx, resetAll) {
     if (picked) {
       mark(n.slot, picked.id);
       if (picked.role === 'directivo') dirToday[picked.id] = (dirToday[picked.id] || 0) + 1;
-      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier === 10 ? 1 : pickedTier, fb: pickedTier === 9, manual: false });
+      out.push({ ...n, subId: picked.id, tier: pickedTier === 9 ? 4 : pickedTier === 10 ? 1 : pickedTier === 11 ? 7 : pickedTier, fb: pickedTier === 9, manual: false });
     } else {
       out.push({ ...n, subId: null, tier: 0, fb: false, manual: false });
     }
@@ -2004,6 +2007,7 @@ const Centro = {
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
+        h('li', null, h('b', null, 'Speaking: '), 'si a la clase que se queda sin profesora le toca desdoble de speaking, la primera opción es siempre la profesora de speaking de ese grupo en esa hora.'),
         h('li', null, h('b', null, 'Plan de apoyo de matemáticas (Belén): '), 'se la trata como una profesora más y se respeta su horario. Solo sustituye en sus horas libres o, en una hora de apoyo, si el grupo al que apoya se queda sin su profesor.'),
         h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias que no sean de excursión.'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta un profesor de infantil lo cubre la profesora de apoyo de infantil. Si faltan 2 o más a la vez, entran PT y AL, mejor quien en esa franja ya esté dando clase en infantil (pon “Infantil” o “4 años” en el grupo de su horario).'),
