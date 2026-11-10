@@ -519,35 +519,66 @@ function notifText(date, s, kind, nota) {
   }
   return 'Sustituyes a ' + tName(s.absentId) + ' el ' + fmtShort(date) + ', ' + slotLabel(s.slot).toLowerCase() + ' (' + sessTime(s.slot) + '). Lugar: ' + place + '.' + (nota ? ' Nota: ' + nota : '');
 }
+const sentEntry = (s) => ({ subId: s.subId, slot: s.slot, absentId: s.absentId, absId: s.absId, place: s.place || '', subject: s.subject || '' });
+// Avisos que faltan por enviar: diferencia entre lo que ya se comunicó al profesorado (day.sent) y el reparto actual
+function diffNotifs(date, day) {
+  if (!day || !day.sent) return [];
+  const notas = notasOf(date), sent = day.sent, out = [];
+  const mk = (s, to, kind) => ({ to, date, slot: s.slot, key: s.key, kind, text: notifText(date, s, kind, kind === 'cancela' ? '' : (notas[s.absId] || '')), nota: kind === 'cancela' ? '' : (notas[s.absId] || ''), ts: Date.now(), read: false, absentId: s.absentId });
+  const cur = new Map((day.subs || []).map((x) => [x.key, x]));
+  for (const [k, x] of cur) {
+    const o = sent[k];
+    if (x.subId && (!o || o.subId !== x.subId)) out.push(mk(x, x.subId, 'asigna'));
+    if (o && o.subId && o.subId !== x.subId) out.push(mk({ ...o, key: k }, o.subId, 'cancela'));
+  }
+  for (const k in sent) if (!cur.has(k) && sent[k].subId) out.push(mk({ ...sent[k], key: k }, sent[k].subId, 'cancela'));
+  return out;
+}
+const pendingKeys = (day) => { const sent = (day && day.sent) || null, set = new Set(); if (!sent) return set; for (const x of day.subs || []) if ((x.subId || '') !== ((sent[x.key] || {}).subId || '')) set.add(x.key); return set; };
+// Lo que ve el profesorado: solo las sustituciones ya enviadas
+function pubDay(d) {
+  if (!d || !d.sent) return d;
+  const sent = d.sent, cur = new Map((d.subs || []).map((x) => [x.key, x])), subs = [];
+  for (const k in sent) { const x = cur.get(k) || {}; subs.push({ ...x, ...sent[k], key: k }); }
+  const subIds = {}; subs.forEach((x) => { if (x.subId) subIds[x.subId] = true; });
+  return { ...d, subs, subIds };
+}
 async function saveDay(date, next, old) {
-  const oldMap = new Map(((old && old.subs) || []).map((s) => [s.key, s]));
-  const nextMap = new Map(next.subs.map((s) => [s.key, s]));
   // Las notas para el sustituto no se guardan en el documento del día (lo lee todo el profesorado):
   // van en el espacio privado de jefatura y en el aviso de quien sustituye.
   const notas = { ...notasOf(date) };
   let notasCambian = false;
   for (const a of next.absences || []) { if (a.nota && notas[a.id] !== a.nota) { notas[a.id] = a.nota; notasCambian = true; } delete a.nota; }
-  const noteOf = (d, s) => notas[s.absId] || '';
-  const out = [];
-  const mk = (s, to, kind, d) => ({ to, date, slot: s.slot, key: s.key, kind, text: notifText(date, s, kind, kind === 'cancela' ? '' : noteOf(d, s)), nota: kind === 'cancela' ? '' : noteOf(d, s), ts: Date.now(), read: false, absentId: s.absentId });
-  for (const [k, s] of nextMap) {
-    const o = oldMap.get(k);
-    if (s.subId && (!o || o.subId !== s.subId)) out.push(mk(s, s.subId, 'asigna', next));
-    if (o && o.subId && o.subId !== s.subId) out.push(mk(o, o.subId, 'cancela', old));
-  }
-  for (const [k, o] of oldMap) if (!nextMap.has(k) && o.subId) out.push(mk(o, o.subId, 'cancela', old));
+  // lo ya comunicado se conserva; un día antiguo (sin registro) se considera enviado tal y como estaba
+  if (!next.sent) { next.sent = {}; for (const x of (old && old.subs) || []) if (x.subId) next.sent[x.key] = sentEntry(x); }
   // la marca de huelga es privada de jefatura: no se guarda en el documento que lee el profesorado
   next.subs = next.subs.map((x) => { const y = { ...x }; delete y.strike; return y; });
   // quién sustituye ese día: lo usan las reglas de seguridad para limitar el chat del día a sus participantes
-  next.subIds = {}; for (const x of next.subs) if (x.subId) next.subIds[x.subId] = true;
+  next.subIds = {}; for (const x of next.subs) if (x.subId) next.subIds[x.subId] = true; for (const k in next.sent) if (next.sent[k].subId) next.subIds[next.sent[k].subId] = true;
   S.days[date] = next;
   renderAll();
   if (notasCambian) { S.priv[date] = { ...(S.priv[date] || {}), notas }; await S.db.doc('private/' + date).set({ notas }, { merge: true }); }
   await S.db.doc('days/' + date).set(next);
-  for (const n of out) await S.db.collection('notifs').add(n);
-  if (window.pushNotify && out.length) window.pushNotify(out).catch(() => {});
-  return out.length;
+  return 0;
 }
+// Envía al profesorado los cambios pendientes de un día (o de todos los días desde hoy)
+function sendDays(dates) {
+  return enqueue(async () => {
+    let total = 0, sub = 0;
+    for (const date of dates) {
+      const day = cloneDay(date), out = diffNotifs(date, day);
+      if (!out.length && !pendingKeys(day).size) continue;
+      day.sent = {}; for (const x of day.subs) if (x.subId) day.sent[x.key] = sentEntry(x);
+      S.days[date] = day; renderAll();
+      await S.db.doc('days/' + date).set(day);
+      for (const n of out) await S.db.collection('notifs').add(n);
+      if (window.pushNotify && out.length) window.pushNotify(out).catch(() => {});
+      total += out.length; sub++;
+    }
+    toast(total ? 'Enviado · ' + plural(total, 'aviso', 'avisos') + ' al profesorado' : 'No había cambios pendientes de enviar');
+  });
+}
+const pendingDates = () => Object.keys(S.days).filter((d) => d >= todayStr() && pendingKeys(S.days[d]).size).sort();
 const cloneDay = (date) => {
   const d = S.days[date];
   return d ? JSON.parse(JSON.stringify(d)) : { date, absences: [], subs: [] };
@@ -570,7 +601,7 @@ const plural = (n, a, b) => n + ' ' + (n === 1 ? a : b);
 function addAbsence(date, tid, slots, nota, tipo) {
   return enqueue(async () => {
     const { n, sin } = await doAddAbsence(date, tid, slots, nota, tipo);
-    toast('Ausencia registrada · ' + plural(n, 'aviso enviado', 'avisos enviados') + (sin ? ' · ' + sin + ' franja(s) sin cubrir' : ''), !!sin);
+    toast('Ausencia registrada · revisa el reparto y pulsa Enviar' + (sin ? ' · ' + sin + ' franja(s) sin cubrir' : ''), !!sin);
   });
 }
 function addAbsenceRange(from, to, tid, slots, nota, tipo) {
@@ -580,7 +611,7 @@ function addAbsenceRange(from, to, tid, slots, nota, tipo) {
       if (weekdayKey(d)) { const r = await doAddAbsence(d, tid, slots, nota, tipo); n += r.n; sin += r.sin; days++; }
       d = addDays(d, 1);
     }
-    toast('Ausencia registrada en ' + plural(days, 'día lectivo', 'días lectivos') + ' · ' + plural(n, 'aviso enviado', 'avisos enviados') + (sin ? ' · ' + sin + ' franja(s) sin cubrir' : ''), !!sin);
+    toast('Ausencia registrada en ' + plural(days, 'día lectivo', 'días lectivos') + ' · revisa cada día y pulsa Enviar' + (sin ? ' · ' + sin + ' franja(s) sin cubrir' : ''), !!sin);
   });
 }
 function removeAbsence(date, absId) {
@@ -592,7 +623,7 @@ function removeAbsence(date, absId) {
     day.subs = assign({ ...day, subs: day.subs.filter((s) => s.absId !== absId) }, date, { ...ctxFor(date), strike }, false);
     if (strike.length !== strikeIds(date).length) await savePriv(date, strike);
     await saveDay(date, day, old);
-    toast('Ausencia quitada y avisos de cancelación enviados');
+    toast('Ausencia quitada · pulsa Enviar para avisar de los cambios');
   });
 }
 function setStrike(date, absId, on) {
@@ -604,7 +635,7 @@ function setStrike(date, absId, on) {
     day.subs = assign({ ...day, subs: day.subs.filter((s) => s.absId !== absId) }, date, { ...ctxFor(date), strike }, false);
     await savePriv(date, strike);
     const n = await saveDay(date, day, old);
-    toast(on ? 'Marcada como huelga: solo cubren los servicios mínimos · ' + n + ' aviso(s)' : 'Ya no es huelga · ' + n + ' aviso(s)');
+    toast(on ? 'Marcada como huelga: solo cubren los servicios mínimos · pulsa Enviar para avisar' : 'Ya no es huelga · pulsa Enviar para avisar');
   });
 }
 function saveSM(week, tid, d, on) {
@@ -624,7 +655,7 @@ function reassignDay(date) {
     const day = cloneDay(date);
     day.subs = assign(day, date, ctxFor(date), true);
     const n = await saveDay(date, day, old);
-    toast('Reparto recalculado · ' + n + ' aviso' + (n === 1 ? '' : 's') + ' enviados');
+    toast('Reparto recalculado · revísalo y pulsa Enviar');
   });
 }
 function setSub(date, key, subId) {
@@ -638,7 +669,7 @@ function setSub(date, key, subId) {
     s.fb = false;
     s.tier = subId ? tierOfTeacher(tById(subId), weekdayKey(date), s.slot) : 0;
     const n = await saveDay(date, day, old);
-    toast(subId ? 'Cambio guardado · aviso enviado a ' + tName(subId) : 'Franja sin asignar' + (n ? ' · aviso de cancelación enviado' : ''));
+    toast(subId ? 'Cambio guardado: ' + tName(subId) + ' · pulsa Enviar para avisar' : 'Franja sin asignar · pulsa Enviar para avisar');
   });
 }
 
@@ -682,7 +713,7 @@ function fixPlanEspecifico() {
       const old = JSON.parse(JSON.stringify(S.days[date])), d2 = cloneDay(date);
       d2.subs = assign(d2, date, ctxFor(date), false);
       const n = await saveDay(date, d2, old);
-      toast('Reparto corregido el ' + fmtShort(date) + ' · ' + plural(n, 'aviso enviado', 'avisos enviados'));
+      toast('Reparto corregido el ' + fmtShort(date) + ' · pulsa Enviar para avisar');
     });
   }
 }
@@ -1145,7 +1176,7 @@ function addExcursion(date, title, tids) {
     day.subs = assign(day, date, { ...ctxFor(date), strike: strikeIds(date).slice() }, false);
     await saveDay(date, day, old);
     const n = await exNotify(date, e, false);
-    toast('Excursión guardada · ' + plural(n, 'aviso enviado', 'avisos enviados') + (day.subs.filter((s) => !s.subId).length ? ' · hay franjas sin cubrir' : ''));
+    toast('Excursión guardada · avisos de la salida enviados · revisa las sustituciones y pulsa Enviar' + (day.subs.filter((s) => !s.subId).length ? ' · hay franjas sin cubrir' : ''));
   });
 }
 function removeExcursion(date, id) {
@@ -1161,7 +1192,7 @@ function removeExcursion(date, id) {
     if (strike.length !== strikeIds(date).length) await savePriv(date, strike);
     await saveDay(date, day, old);
     await exNotify(date, e, true);
-    toast('Excursión cancelada y avisos enviados');
+    toast('Excursión cancelada · pulsa Enviar para avisar de las sustituciones');
   });
 }
 const Exc = {
@@ -1236,7 +1267,7 @@ const Hoy = {
         h('label', { class: 'field' }, h('span', null, 'Motivo'), this.motivo),
         h('label', { class: 'field' }, h('span', null, 'Hasta el (si falta varios días)'), this.hasta)),
       h('label', { class: 'field' }, h('span', null, 'Nota para quien sustituya'), this.nota),
-      h('div', { class: 'row-end' }, h('button', { class: 'btn primary', type: 'submit' }, icon('send'), 'Registrar y avisar'))
+      h('div', { class: 'row-end' }, h('button', { class: 'btn primary', type: 'submit' }, icon('check'), 'Registrar'), (this.sendBtn = h('button', { class: 'btn', type: 'button', onclick: () => sendDays([S.date]) }, icon('send'), 'Enviar')))
     );
     this.absWrap = h('div', { class: 'card' });
     this.subWrap = h('div', { class: 'card' });
@@ -1283,6 +1314,12 @@ const Hoy = {
       const sm = smFor(date);
       this.banner.append(h('p', { class: 'note' + (sm.length ? '' : ' warn') }, sm.length ? 'Hay huelga: solo cubren los servicios mínimos (' + sm.map(tName).join(', ') + ').' : 'Hay huelga y no has marcado servicios mínimos para este día. Márcalos en la pestaña Servicios mínimos y pulsa “Recalcular todo”.'));
     }
+    this.pend = pendingKeys(day);
+    const pendN = diffNotifs(date, day).length, otros = pendingDates().filter((d) => d !== date);
+    if (this.sendBtn) { this.sendBtn.disabled = !pendN; this.sendBtn.className = 'btn' + (pendN ? ' primary send-pend' : ''); this.sendBtn.lastChild.textContent = pendN ? 'Enviar (' + pendN + ')' : 'Enviar'; }
+    if (pendN || otros.length) this.banner.append(h('div', { class: 'note send-note' },
+      h('p', null, pendN ? h('b', null, 'Reparto sin enviar. ') : null, pendN ? 'El profesorado todavía no ve estos cambios. Revisa las franjas (puedes cambiar a cualquier sustituto con el desplegable) y pulsa Enviar cuando estés de acuerdo.' : '', otros.length ? (pendN ? ' ' : '') + 'Hay cambios sin enviar en otros días: ' + otros.map(fmtShort).join(', ') + '.' : ''),
+      h('div', { class: 'row-wrap' }, pendN ? h('button', { class: 'btn primary sm', onclick: () => sendDays([date]) }, icon('send'), 'Enviar este día') : null, otros.length ? h('button', { class: 'btn ghost sm', onclick: () => sendDays(pendingDates()) }, icon('send'), 'Enviar todos los días (' + (pendN ? otros.length + 1 : otros.length) + ')') : null)));
     if (S.school.example) this.banner.append(h('p', { class: 'note' }, 'Estás viendo datos de ejemplo. Bórralos en Centro antes de empezar.'));
 
     // resumen
@@ -1310,7 +1347,7 @@ const Hoy = {
           h('div', { class: 'tl-dot', 'aria-hidden': 'true' }),
           h('div', { class: 'tl-body' }, subs.length ? subs.map((x) => h('div', { class: 'tl-item' },
             h('span', { class: 'tl-abs' }, avatar(x.absentId, 'sm'), tName(x.absentId)), h('span', { class: 'tl-arrow', 'aria-hidden': 'true' }, icon('chevr')),
-            x.subId ? h('span', { class: 'tl-subwrap' }, h('b', { class: 'tl-sub' }, avatar(x.subId, 'sm'), tName(x.subId)), (() => { const st = this.seen(x); return st ? h('span', { class: 'ent ' + (st === 'read' ? 'ok' : 'no'), title: st === 'read' ? 'El profesor ha pulsado «Enterado»' : 'Ha recibido el aviso pero aún no ha pulsado «Enterado»' }, st === 'read' ? '✓ Enterado' : '… sin enterar') : null; })()) : h('b', { class: 'tl-sub bad' }, 'Sin cubrir'),
+            x.subId ? h('span', { class: 'tl-subwrap' }, h('b', { class: 'tl-sub' }, avatar(x.subId, 'sm'), tName(x.subId)), (() => { if (this.pend && this.pend.has(x.key)) return h('span', { class: 'ent no', title: 'Aún no se ha enviado al profesor' }, '✎ sin enviar'); const st = this.seen(x); return st ? h('span', { class: 'ent ' + (st === 'read' ? 'ok' : 'no'), title: st === 'read' ? 'El profesor ha pulsado «Enterado»' : 'Ha recibido el aviso pero aún no ha pulsado «Enterado»' }, st === 'read' ? '✓ Enterado' : '… sin enterar') : null; })()) : h('b', { class: 'tl-sub bad' }, 'Sin cubrir'),
             h('span', { class: 'muted small' }, placeTxt(x)), x.subId ? tierPill(x) : null)) : h('span', { class: 'muted small' }, 'Sin sustituciones'))));
       }
       this.timeline.append(tl);
@@ -1358,7 +1395,7 @@ const Hoy = {
             h('div', { class: 'sub-pick' },
               this.subSelect(s, date, wd),
               h('div', { class: 'meta' }, tierPill(s), s.fb ? h('span', { class: 'small muted', title: 'No había nadie en el nivel que marca el criterio; se ha usado otro.' }, 'criterio ampliado') : null, s.manual ? h('span', { class: 'small muted' }, 'manual') : null,
-                notif ? h('span', { class: 'small ' + (notif === 'read' ? 'ok' : 'muted') }, notif === 'read' ? '✓ enterado' : 'avisado · sin enterar') : null)));
+                this.pend && this.pend.has(s.key) ? h('span', { class: 'small warn-t' }, '✎ sin enviar') : (notif ? h('span', { class: 'small ' + (notif === 'read' ? 'ok' : 'muted') }, notif === 'read' ? '✓ enterado' : 'avisado · sin enterar') : null))));
         })));
     }
   },
@@ -2051,7 +2088,7 @@ async function boot() {
     S.loaded.school = true; renderAll();
   }, () => { S.loaded.school = true; renderAll(); });
   S.db.collection('days').onSnapshot((snap) => {
-    S.days = {}; snap.docs.forEach((d) => { S.days[d.id] = d.data(); });
+    S.days = {}; snap.docs.forEach((d) => { S.days[d.id] = S.admin ? d.data() : pubDay(d.data()); });
     S.loaded.days = true; renderAll();
     if (S.admin) fixPlanEspecifico();
     if (views.chat.built) refresh(views.chat);
