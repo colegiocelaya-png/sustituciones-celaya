@@ -1001,16 +1001,24 @@ function miDia(date) {
   else { title = isToday ? 'Día tranquilo' : 'Ese día vas tranquilo/a'; sub = 'No tienes sustituciones ni patio ' + (isToday ? 'hoy.' : 'ese día.'); }
   const items = h('div', { class: 'md-items' });
   for (const m of mine) {
-    const nota = (S.dayNotifs.find((n) => n.key === m.key && n.to === S.me && n.kind === 'asigna') || {}).nota;
+    const nota = ([...S.notifs, ...S.dayNotifs].find((n) => n.key === m.key && n.to === S.me && n.kind === 'asigna') || {}).nota;
     items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, sessTime(m.slot).split('–')[0]),
       h('span', null, h('b', null, (m.slot === 'R' ? 'Recreo' : m.slot + 'ª hora') + ' · '), 'cubres a ' + tName(m.absentId) + ' · ' + placeTxt(m), nota ? h('span', { class: 'small muted' }, ' · Nota: ' + nota) : null)));
   }
   if (patio) items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, sessTime('R').split('–')[0]), h('span', null, h('b', null, 'Patio'), ' · recreo ' + sessTime('R'))));
   if (sm) items.append(h('div', { class: 'md-it' }, h('b', { class: 'md-time' }, '—'), h('span', null, h('b', null, 'Servicios mínimos'), ' ese día')));
+  // «Enterado»: confirma desde aquí los avisos de sustitución de ese día (y desaparecen también de la pestaña Avisos)
+  const pend = S.notifs.filter((n) => n.date === date && !n.read && (n.kind === 'asigna' || n.kind === 'cancela'));
+  const cancelled = pend.filter((n) => n.kind === 'cancela').length;
+  let ack = null;
+  if (pend.length) ack = h('div', { class: 'md-ack' },
+    cancelled ? h('p', { class: 'small md-cancel' }, cancelled === 1 ? 'Se te ha quitado una sustitución.' : 'Se te han quitado ' + cancelled + ' sustituciones.') : null,
+    h('button', { class: 'btn primary md-ack-btn', onclick: () => { pend.forEach((n) => Mis.read(n)); } }, icon('check'), 'Enterado'));
+  else if (mine.length && [...S.notifs].some((n) => n.date === date && n.kind === 'asigna')) ack = h('div', { class: 'md-ack done' }, h('span', { class: 'ent ok' }, '✓ Enterado'));
   const mk = date + '|' + title + '|' + items.children.length, pop = S._mdKey !== mk; S._mdKey = mk;
   return h('div', { class: 'card mydia ' + cls + ' no-print' + (pop && !REDUCE() ? ' pop' : '') },
     avatar(S.me, 'xl'),
-    h('div', { class: 'md-body' }, h('p', { class: 'md-hi' }, 'Hola, ' + first), h('h2', { class: 'md-title' }, title), sub ? h('p', { class: 'muted md-sub' }, sub) : null, items.children.length ? items : null));
+    h('div', { class: 'md-body' }, h('p', { class: 'md-hi' }, 'Hola, ' + first), h('h2', { class: 'md-title' }, title), sub ? h('p', { class: 'muted md-sub' }, sub) : null, items.children.length ? items : null, ack));
 }
 function greeting() {
   const [txt, autor, atr] = fraseDelDia();
