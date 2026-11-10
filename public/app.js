@@ -917,7 +917,7 @@ function initials(name) {
 }
 // Profesorado con foto (archivos en /avatars/<id>.jpg). Si falla la carga se muestran las iniciales.
 const FOTOS = new Set(['pablo','jesus-canedo','carmen-gordillo','jorge','ana-hernandez','carmen','victoria','gema','andrea','conchi','mar','eli','belen','pilar','natalia','miriam-f','ana-torres','noelia','juanfran','sonia','virginia-amor','miriam-del-castillo','alba','miriam-vela','merche','susana-ruiz','rebeca','ricardo']);
-const FOTOS_V = 22;
+const FOTOS_V = 23;
 function avatar(id, size, jefe) {
   const T = tById(id), name = jefe ? 'Jefatura' : (T ? T.name : '?');
   let n = 0; for (const ch of String(jefe ? 'jefe' : id)) n = (n * 31 + ch.charCodeAt(0)) % 997;
