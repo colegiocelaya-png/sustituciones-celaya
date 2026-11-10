@@ -1289,7 +1289,8 @@ const Hoy = {
     // línea del día
     this.timeline.textContent = '';
     this.timeline.append(h('div', { class: 'card-head' }, h('h2', null, 'La jornada, hora a hora'),
-      sin ? h('span', { class: 'pill bad' }, sin + ' sin cubrir') : (day.subs.length ? h('span', { class: 'pill tier t1' }, 'Todo cubierto') : null)));
+      sin ? h('span', { class: 'pill bad' }, sin + ' sin cubrir') : (day.subs.length ? h('span', { class: 'pill tier t1' }, 'Todo cubierto') : null),
+      (() => { const ss = day.subs.map((x) => this.seen(x)).filter(Boolean); if (!ss.length) return null; const ok = ss.filter((v) => v === 'read').length; return h('span', { class: 'pill ' + (ok === ss.length ? 'tier t1' : 'tier t3'), title: 'Sustituciones que el profesor ya ha confirmado' }, '✓ Enterados ' + ok + '/' + ss.length); })()));
     if (!day.absences.length) this.timeline.append(h('div', { class: 'empty good slim' }, h('div', { class: 'empty-ico' }, icon(wd ? 'check' : 'calendar')), h('div', null, h('b', null, wd ? 'No falta nadie' : 'Sin clase este día'), wd ? h('p', { class: 'muted small' }, 'Cuando registres una ausencia, aquí verás quién cubre cada hora.') : null)));
     else {
       const tl = h('ol', { class: 'tl' });
@@ -1301,7 +1302,7 @@ const Hoy = {
           h('div', { class: 'tl-dot', 'aria-hidden': 'true' }),
           h('div', { class: 'tl-body' }, subs.length ? subs.map((x) => h('div', { class: 'tl-item' },
             h('span', { class: 'tl-abs' }, avatar(x.absentId, 'sm'), tName(x.absentId)), h('span', { class: 'tl-arrow', 'aria-hidden': 'true' }, icon('chevr')),
-            x.subId ? h('b', { class: 'tl-sub' }, avatar(x.subId, 'sm'), tName(x.subId)) : h('b', { class: 'tl-sub bad' }, 'Sin cubrir'),
+            x.subId ? h('span', { class: 'tl-subwrap' }, h('b', { class: 'tl-sub' }, avatar(x.subId, 'sm'), tName(x.subId)), (() => { const st = this.seen(x); return st ? h('span', { class: 'ent ' + (st === 'read' ? 'ok' : 'no'), title: st === 'read' ? 'El profesor ha pulsado «Enterado»' : 'Ha recibido el aviso pero aún no ha pulsado «Enterado»' }, st === 'read' ? '✓ Enterado' : '… sin enterar') : null; })()) : h('b', { class: 'tl-sub bad' }, 'Sin cubrir'),
             h('span', { class: 'muted small' }, placeTxt(x)), x.subId ? tierPill(x) : null)) : h('span', { class: 'muted small' }, 'Sin sustituciones'))));
       }
       this.timeline.append(tl);
@@ -1349,7 +1350,7 @@ const Hoy = {
             h('div', { class: 'sub-pick' },
               this.subSelect(s, date, wd),
               h('div', { class: 'meta' }, tierPill(s), s.fb ? h('span', { class: 'small muted', title: 'No había nadie en el nivel que marca el criterio; se ha usado otro.' }, 'criterio ampliado') : null, s.manual ? h('span', { class: 'small muted' }, 'manual') : null,
-                notif ? h('span', { class: 'small ' + (notif === 'read' ? 'ok' : 'muted') }, notif === 'read' ? '✓ visto' : 'avisado · sin ver') : null)));
+                notif ? h('span', { class: 'small ' + (notif === 'read' ? 'ok' : 'muted') }, notif === 'read' ? '✓ enterado' : 'avisado · sin enterar') : null)));
         })));
     }
   },
@@ -1505,7 +1506,7 @@ const Mis = {
         h('h4', null, cancel ? 'Ya no tienes que sustituir a ' : 'Sustituyes a ', h('b', null, tName(n.absentId))),
         !cancel && sub && sub.place ? h('div', { class: 'aviso-place' }, icon('home'), placeTxt(sub)) : null,
         !cancel && n.nota ? h('div', { class: 'small muted' }, 'Nota: ' + n.nota) : null),
-      h('button', { class: 'btn ' + (cancel ? 'ghost' : 'primary') + ' sm', onclick: () => this.read(n) }, icon('check'), 'Entendido'));
+      h('button', { class: 'btn ' + (cancel ? 'ghost' : 'primary') + ' sm', onclick: () => this.read(n) }, icon('check'), 'Enterado'));
   },
   item(m, quiet) {
     return h('div', { class: 'row sub' + (quiet ? ' quiet' : '') },
