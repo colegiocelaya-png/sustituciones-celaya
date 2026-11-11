@@ -257,9 +257,9 @@
     // Liga un correo a un profesor/a concreto (cada persona solo ve sus propios avisos)
     setTid: function (email, tid) { return fs.doc('access/' + email).set({ tid: tid || null }, { merge: true }); },
     // Crea o restablece cuentas con contraseña (la jefatura se las da a cada profesor)
-    passwords: function (emails) {
+    passwords: function (emails, reset) {
       return auth.currentUser.getIdToken().then(function (t) {
-        return fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ emails: emails }) });
+        return fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ emails: emails, reset: !!reset }) });
       }).then(function (r) {
         if (r.ok) return r.json();
         return r.json().catch(function () { return {}; }).then(function (j) { throw new Error('HTTP ' + r.status + (j.detail ? ' · ' + j.detail : j.error ? ' · ' + j.error : '')); });

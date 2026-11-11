@@ -49,14 +49,13 @@ module.exports = async (req, res) => {
       if (e === email) { out.push({ email: e, error: 'tu propia cuenta (no se toca para no cerrarte la sesión)' }); continue; }
       const a = await db.doc('access/' + e).get();
       if (!a.exists) { out.push({ email: e, error: 'no está en la lista' }); continue; }
+      let existing = null;
+      try { existing = await admin.auth().getUserByEmail(e); } catch (err) { if (err.code !== 'auth/user-not-found') throw err; }
+      // sin "reset" solo se crean las cuentas nuevas: a quien ya tiene cuenta no se le cambia la contraseña ni se le cierra la sesión
+      if (existing && !body.reset) { out.push({ email: e, error: 'ya tiene cuenta: no se ha tocado' }); continue; }
       const password = genPassword();
-      try {
-        const u = await admin.auth().getUserByEmail(e);
-        await admin.auth().updateUser(u.uid, { password, emailVerified: true });
-      } catch (err) {
-        if (err.code === 'auth/user-not-found') await admin.auth().createUser({ email: e, password, emailVerified: true });
-        else throw err;
-      }
+      if (existing) await admin.auth().updateUser(existing.uid, { password, emailVerified: true });
+      else await admin.auth().createUser({ email: e, password, emailVerified: true });
       out.push({ email: e, password });
     }
     return res.status(200).json({ users: out });

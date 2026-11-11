@@ -2124,14 +2124,14 @@ const Centro = {
       if (!users.length) return;
       const text = users.map((u) => u.email + '\t' + (u.password || ('(' + u.error + ')'))).join('\n');
       res.append(h('div', { class: 'card inner' }, h('b', null, 'Contraseñas nuevas'),
-        h('p', { class: 'muted small' }, 'Cópialas ahora y entrégalas a cada persona: no se pueden volver a ver (puedes generar otra cuando quieras).'),
+        h('p', { class: 'muted small' }, 'Cópialas ahora y entrégalas a cada persona: no se pueden volver a ver. Quien ya tenía cuenta no aparece aquí con contraseña nueva: su clave no se ha tocado.'),
         h('pre', { class: 'pwlist' }, text),
         h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: () => printPw(users) }, icon('print'), 'Imprimir / PDF'), h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('Copiadas'); } catch (e) { toast('Selecciona el texto y cópialo a mano.', true); } } }, 'Copiar'))));
     };
     showPw(S.pwRes || []);
-    const gen = async (emails, btn) => {
+    const gen = async (emails, btn, reset) => {
       if (btn) btn.disabled = true;
-      try { showPw(await window.accessApi.passwords(emails)); }
+      try { showPw(await window.accessApi.passwords(emails, reset)); }
       catch (e) { const m = String((e && e.message) || ''); toast('No se pudieron crear' + (m ? ' (' + m + ')' : '') + '. ' + (/404/.test(m) ? 'La función no está publicada en Vercel.' : /403/.test(m) ? 'Tu cuenta no es de jefatura.' : /500/.test(m) ? 'Revisa la clave del servidor en Vercel.' : ''), true); }
       if (btn) btn.disabled = false;
     };
@@ -2144,9 +2144,9 @@ const Centro = {
         (() => { const q = (S.presence || {})[a.id]; return q ? h('span', { class: 'pres ok', title: 'Último acceso' }, timeAgo(q.ts), q.push ? h('span', { class: 'pres-bell', title: 'Avisos activados' }, icon('bell')) : null) : h('span', { class: 'pres no' }, 'Aún no ha entrado'); })(),
         h('select', { class: 'tidsel', 'aria-label': 'Profesor/a de ' + a.id, onchange: (ev) => window.accessApi.setTid(a.id, ev.target.value).then(() => toast('Asignado'), () => toast('No se pudo asignar.', true)) },
           h('option', { value: '' }, '— sin asignar —'), sortedTeachers().map((t) => h('option', { value: t.id, selected: t.id === a.tid }, t.name))),
-        h('button', { class: 'btn ghost sm', title: 'Crea o restablece su contraseña', onclick: (ev) => gen([a.id], ev.currentTarget) }, 'Contraseña'),
+        h('button', { class: 'btn ghost sm', title: 'Crea su cuenta; si ya la tiene, la restablece (le cierra la sesión)', onclick: (ev) => { const q = (S.presence || {})[a.id]; if (q && !confirm('Este profesor ya ha entrado en la app. Si restableces su contraseña se le cerrará la sesión y la anterior dejará de valer.\n\n¿Restablecer?')) return; gen([a.id], ev.currentTarget, true); } }, 'Contraseña'),
         a.id === window.accessApi.me() ? null : h('button', { class: 'x', 'aria-label': 'Quitar a ' + a.id, onclick: () => window.accessApi.remove(a.id) }, '×')))) : h('p', { class: 'muted small' }, 'Todavía no hay nadie más.'),
-      teachersOnly.length ? h('div', { class: 'row-end' }, h('button', { class: 'btn', onclick: (ev) => { const b = ev.currentTarget; if (b.dataset.armed) { b.dataset.armed = ''; b.textContent = 'Generar contraseñas para todo el profesorado'; gen(teachersOnly, b); return; } b.dataset.armed = '1'; b.textContent = 'Pulsa otra vez: se restablecerán las de todos'; setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Generar contraseñas para todo el profesorado'; }, 4000); } }, 'Generar contraseñas para todo el profesorado')) : null,
+      teachersOnly.length ? h('div', { class: 'row-end' }, h('button', { class: 'btn', title: 'Solo crea las cuentas que aún no existen; no toca las de quien ya tiene contraseña', onclick: (ev) => gen(teachersOnly, ev.currentTarget, false) }, 'Generar contraseñas de las cuentas nuevas')) : null,
       res,
       ta, h('div', { class: 'row-end' }, h('button', { class: 'btn primary', onclick: async () => { const n = await window.accessApi.add(ta.value); ta.value = ''; toast(n + ' correo' + (n === 1 ? '' : 's') + ' añadido' + (n === 1 ? '' : 's')); } }, icon('plus'), 'Añadir')));
   },
