@@ -426,6 +426,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .composer { gap: 10px; align-items: center; } .composer input { border-radius: 999px; padding: 12px 16px; }
 .composer .btn { border-radius: 999px; padding: 11px 20px; }
 
+.res-t{width:100%;border-collapse:collapse}.res-t th,.res-t td{padding:7px 8px;border-bottom:1px solid var(--line,rgba(0,0,0,.1));text-align:left}.res-t .n{text-align:right;font-variant-numeric:tabular-nums;width:4.5em}.res-t thead th{font-size:.8rem;color:var(--muted,#777)}.res-t tfoot th{border-top:2px solid currentColor;border-bottom:0}.res-nm{display:flex;align-items:center;gap:8px}.res-t .bar-c{width:22%}.res-sub{font-weight:600;margin:0 0 6px}
 /* ---- impresión ---- */
 .print-foot, .print-only { display: none; }
 @media print {
@@ -443,6 +444,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
   .view.enter, .view.enter > * { animation: none !important; }
   .print-foot { display: block; position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #666; }
   .tl-item { background: #f6e6e3; }
+  .card.res-card { break-inside: auto; margin-bottom: 12mm; } .res-t { font-size: 11px; } .res-t th, .res-t td { padding: 3px 6px; } .res-t tr { break-inside: avoid; } .res-t .av { width: 20px; height: 20px; font-size: 9px; }
   .print-only { display: block; } .edit-only { display: none !important; }
   #main .view:has(.sched) > .picker, #main .view:has(.sched) > .card:not(:has(.sched)), .card-head .inline { display: none !important; }
 }
@@ -477,4 +479,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 <div id="sheet" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script><script src="/firebase-config.js"></script><script src="/firebase-shim.js"></script>
-<script src="/app.js?v=6c5e3186d5"></script></body></html>
+<script src="/app.js?v=b907344bff"></script></body></html>

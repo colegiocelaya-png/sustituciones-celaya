@@ -844,7 +844,7 @@ function renderHeader() {
   if (window.authApi) w.append(h('button', { class: 'btn ghost sm no-print', type: 'button', 'aria-label': 'Cerrar sesión', title: 'Cerrar sesión', onclick: () => { if (confirm('¿Cerrar sesión en este dispositivo?\n\nDejará de recibir avisos hasta que vuelvas a entrar.')) window.authApi.signOut(); } }, icon('out')));
 }
 function unreadCount() { return S.notifs.filter((n) => !n.read).length; }
-const TAB_ICONS = { hoy: 'home', panel: 'calendar', mis: 'bell', chat: 'chat', patios: 'sun', prof: 'users', exc: 'pin', sm: 'shield', centro: 'school' };
+const TAB_ICONS = { hoy: 'home', panel: 'calendar', mis: 'bell', chat: 'chat', patios: 'sun', prof: 'users', exc: 'pin', sm: 'shield', resumen: 'list', centro: 'school' };
 function tabsList() {
   const t = [];
   if (S.admin) t.push(['hoy', 'Hoy']);
@@ -855,6 +855,7 @@ function tabsList() {
   t.push(['prof', S.admin ? 'Profesorado' : 'Horarios']);
   if (S.admin) t.push(['exc', 'Excursiones']);
   if (S.admin) t.push(['sm', 'Servicios mínimos']);
+  if (S.admin) t.push(['resumen', 'Resumen']);
   if (S.admin) t.push(['centro', 'Centro']);
   return t;
 }
@@ -869,7 +870,7 @@ function renderTabs() {
   for (const k in views) views[k].el.hidden = k !== S.tab;
   renderBottomNav();
 }
-const SHORT = { hoy: 'Hoy', panel: 'Panel', mis: 'Mi turno', chat: 'Chat', patios: 'Patios', prof: 'Horarios', exc: 'Excursión', sm: 'Huelga', centro: 'Centro' };
+const SHORT = { hoy: 'Hoy', panel: 'Panel', mis: 'Mi turno', chat: 'Chat', patios: 'Patios', prof: 'Horarios', exc: 'Excursión', sm: 'Huelga', resumen: 'Resumen', centro: 'Centro' };
 function renderBottomNav() {
   const nav = $('#bnav'), sheet = $('#sheet');
   if (!nav) return;
@@ -912,6 +913,7 @@ function cellState(T, wd, slot) {
   return (isSpecial(T.role) ? 'sesión ' + ROLES[T.role] : 'en clase') + (c.g ? ' ' + c.g : '');
 }
 const ICONS = {
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
   sound: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
@@ -1233,6 +1235,49 @@ function removeExcursion(date, id) {
     toast('Excursión cancelada · pulsa Enviar para avisar de las sustituciones');
   });
 }
+/* ---------- Resumen del curso (1 sep – 30 jun) ---------- */
+const cursoDe = (d) => { const y = +d.slice(0, 4), m = +d.slice(5, 7); return m >= 9 ? y : y - 1; };
+const cursoLbl = (y) => y + '-' + String(y + 1).slice(2);
+function resumenCurso(y) {
+  const ini = y + '-09-01', fin = (y + 1) + '-06-30', hoy = todayStr();
+  const px = S.school.patioExtra || { desde: PATIO_DESDE, base: PATIO_BASE_DEFAULT }, base = px.base || {}, desde = px.desde || PATIO_DESDE;
+  const R = {};
+  const get = (id) => R[id] || (R[id] = { clases: 0, patios: 0, hist: 0 });
+  for (const d in S.days) {
+    if (d < ini || d > fin || d > hoy) continue;
+    const day = S.days[d], list = day.sent ? Object.values(day.sent) : (day.subs || []);
+    for (const x of list) {
+      if (!x.subId) continue;
+      if (x.slot === 'R') { if (y === 2026 && d < desde) continue; get(x.subId).patios++; } else get(x.subId).clases++;
+    }
+  }
+  if (y === 2026) for (const id in base) { const n = (base[id] || {}).n || 0; if (n) { get(id).patios += n; get(id).hist = n; } }
+  const rows = S.school.teachers.map((t) => ({ t, ...(R[t.id] || { clases: 0, patios: 0, hist: 0 }) })).map((r) => ({ ...r, total: r.clases + r.patios }))
+    .sort((a, b) => b.total - a.total || a.t.name.localeCompare(b.t.name, 'es'));
+  return { rows, ini, fin, clases: rows.reduce((s, r) => s + r.clases, 0), patios: rows.reduce((s, r) => s + r.patios, 0) };
+}
+const Resumen = {
+  el: h('section', { class: 'view', hidden: true }), built: false,
+  build() { this.y = cursoDe(todayStr()); $('#main').append(this.el); },
+  render() {
+    const el = this.el; el.textContent = '';
+    const ys = new Set([cursoDe(todayStr())]); for (const d in S.days) ys.add(cursoDe(d));
+    const sel = h('select', { id: 'res-curso', 'aria-label': 'Curso', onchange: (e) => { this.y = +e.target.value; this.render(); } }, [...ys].sort((a, b) => b - a).map((y) => h('option', { value: y, selected: y === this.y }, 'Curso ' + cursoLbl(y))));
+    const r = resumenCurso(this.y), f = (d) => d.slice(8) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+    const max = Math.max(1, ...r.rows.map((x) => x.total));
+    const z = (n) => n || '–';
+    el.append(h('div', { class: 'card res-card' },
+      h('div', { class: 'card-head' }, h('h3', null, 'Resumen de sustituciones'), h('div', { class: 'inline no-print' }, sel, printBtn('Imprimir'))),
+      h('p', { class: 'res-sub' }, 'Curso ' + this.y + '-' + (this.y + 1) + ' · del ' + f(r.ini) + ' al ' + f(r.fin)),
+      h('p', { class: 'muted small no-print' }, 'Clases y patios que ha sustituido cada profesor a lo largo del curso. Cuenta lo ya enviado al profesorado hasta hoy' + (this.y === 2026 ? '; los patios incluyen el historial anterior a la app' : '') + '.'),
+      h('div', { class: 'scroll' }, h('table', { class: 'res-t' },
+        h('thead', null, h('tr', null, h('th', null, 'Profesor/a'), h('th', { class: 'n' }, 'Clases'), h('th', { class: 'n' }, 'Patios'), h('th', { class: 'n' }, 'Total'), h('th', { class: 'bar-c no-print' }, ''))),
+        h('tbody', null, r.rows.map((x) => h('tr', null, h('td', null, h('span', { class: 'res-nm' }, avatar(x.t.id, 'sm'), x.t.name)), h('td', { class: 'n' }, z(x.clases)), h('td', { class: 'n' }, z(x.patios)), h('td', { class: 'n' }, h('b', null, z(x.total))),
+          h('td', { class: 'bar-c no-print' }, h('span', { class: 'pcub-bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + Math.round((x.total / max) * 100) + '%' })))))),
+        h('tfoot', null, h('tr', null, h('th', null, 'Total del centro'), h('th', { class: 'n' }, r.clases), h('th', { class: 'n' }, r.patios), h('th', { class: 'n' }, r.clases + r.patios), h('th', { class: 'no-print' }, '')))))));
+  }
+};
+views.resumen = Resumen;
 const Exc = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { this.sel = new Set(); this.date = todayStr(); $('#main').append(this.el); },
