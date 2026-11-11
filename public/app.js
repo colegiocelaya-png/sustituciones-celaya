@@ -637,8 +637,17 @@ function removeAbsence(date, absId) {
     const strike = strikeIds(date).filter((i) => i !== absId);
     day.subs = assign({ ...day, subs: day.subs.filter((s) => s.absId !== absId) }, date, { ...ctxFor(date), strike }, false);
     if (strike.length !== strikeIds(date).length) await savePriv(date, strike);
+    // quitar una ausencia anula al momento lo ya comunicado de ella: desaparece del panel del profesorado y se avisa de la cancelación
+    const base = old.sent || Object.fromEntries((old.subs || []).filter((x) => x.subId).map((x) => [x.key, sentEntry(x)]));
+    day.sent = {}; const cancel = [];
+    for (const k in base) {
+      if (base[k].absId === absId) { if (base[k].subId) cancel.push({ to: base[k].subId, date, slot: base[k].slot, key: k, kind: 'cancela', text: notifText(date, { ...base[k], key: k }, 'cancela', ''), nota: '', ts: Date.now(), read: false, absentId: base[k].absentId }); }
+      else day.sent[k] = base[k];
+    }
     await saveDay(date, day, old);
-    toast('Ausencia quitada · pulsa Enviar para avisar de los cambios');
+    for (const n of cancel) await S.db.collection('notifs').add(n);
+    if (window.pushNotify && cancel.length) window.pushNotify(cancel).catch(() => {});
+    toast(cancel.length ? 'Ausencia quitada · se ha avisado a ' + plural(cancel.length, 'sustituto', 'sustitutos') + ' de que ya no tiene que cubrirla' : 'Ausencia quitada · pulsa Enviar para avisar de los cambios');
   });
 }
 function setStrike(date, absId, on) {
