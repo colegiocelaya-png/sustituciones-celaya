@@ -72,7 +72,7 @@ module.exports = async (req, res) => {
       const snap = await db.collection('tokens').where('tid', '==', it.to).get();
       if (snap.empty) continue;
       const tokens = snap.docs.map((d) => d.data().token);
-      const title = it.kind === 'cancela' ? 'Sustitución cancelada' : it.kind === 'chat' ? 'Mensaje de Jefatura' : it.kind === 'exc' ? 'Excursión' : 'Nueva sustitución';
+      const title = it.kind === 'cancela' ? 'Sustitución cancelada' : it.kind === 'chat' ? 'Mensaje de Jefatura' : it.kind === 'exc' ? 'Excursión' : it.kind === 'esp' ? 'Día especial' : 'Nueva sustitución';
       const r = await admin.messaging().sendEachForMulticast({
         tokens,
         data: { title, body: String(it.text).slice(0, 300), url: '/' },

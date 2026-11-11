@@ -45,8 +45,16 @@ function freedByExcursion(day, wd, teachers) {
       }
     }
   }
+  if (day && day.esp && day.esp.on) {
+    for (const U of teachers) {
+      if (U.role !== 'especialista' || !espAnula(day, U)) continue;
+      for (const sl of ['1', '2', '3', '4', '5', '6']) { const c = U.sched && U.sched[wd + sl]; if (c && c.t === 'c') (out[U.id] = out[U.id] || new Set()).add(sl); }
+    }
+  }
   return out;
 }
+// Día especial: se anulan las especialidades (salvo las de los profesores que se marquen) y cada tutor se queda con su grupo
+const espAnula = (day, T) => !!(day && day.esp && day.esp.on && T && !(day.esp.keep || []).includes(T.id));
 const isInfGroup = (g) => /infantil|\binf\b|\b[345]\s?(años|anos|a)\b|\bi[345]\b/i.test(norm(g || ''));
 
 function weekdayKey(date) {
@@ -95,7 +103,8 @@ function needsFor(day, wd, teachers, patio, strike) {
         if (onPatio(patio, wd, T.id)) out.push({ key: a.id + '_R', absId: a.id, absentId: T.id, slot: 'R', place: (patio && patio.turnsInf && (patio.turnsInf[wd] || []).includes(T.id)) ? 'Patio de infantil' : 'Patio', strike: strike.includes(a.id) });
       } else {
         const c = cellOf(T, wd, s);
-        if (c && c.t === 'c' && !isSpecial(T.role) && !(hg && c.g === hg)) {
+        const espSkip = T.role !== 'directivo' && espAnula(day, T) && !(homeGroup(T) && c && c.g === homeGroup(T)); // día especial: solo se cubre lo que da a su propio grupo
+        if (c && c.t === 'c' && !isSpecial(T.role) && !(hg && c.g === hg) && !espSkip) {
           out.push({ key: a.id + '_' + s, absId: a.id, absentId: T.id, slot: s, place: c.g || ('Clase de ' + T.name), subject: c.m || (typeof matOf === 'function' ? matOf(T.id, wd, s) : ''), strike: strike.includes(a.id) });
         }
       }
@@ -913,6 +922,7 @@ function cellState(T, wd, slot) {
   return (isSpecial(T.role) ? 'sesión ' + ROLES[T.role] : 'en clase') + (c.g ? ' ' + c.g : '');
 }
 const ICONS = {
+  star: '<path d="m12 2 3 6.5 7 .9-5.1 4.9 1.3 7L12 17.8 5.8 21.3l1.3-7L2 9.4l7-.9z"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
@@ -1278,6 +1288,62 @@ const Resumen = {
   }
 };
 views.resumen = Resumen;
+/* ---------- Día especial: se anulan las especialidades ---------- */
+const espAnulaT = (day, T) => !!(day && day.esp && day.esp.on && T && !(day.esp.keep || []).includes(T.id));
+function espTexto(date, e) {
+  const when = date === todayStr() ? 'Hoy' : fmtShort(date);
+  const keep = (e.keep || []).map(tName);
+  return when + ' se anulan las especialidades por organización del centro' + (e.motivo ? ' (' + e.motivo + ')' : '') + '. Cada profesor/a se queda todo el día con su grupo' + (keep.length ? ', salvo ' + keep.join(', ') + ', que mantienen su especialidad' : '') + '.';
+}
+function espCard(date, admin) {
+  const day = S.days[date], e = day && day.esp;
+  if (!S.loaded.school) return null;
+  const notifs = (admin ? S.dayNotifs : S.notifs).filter((n) => n.date === date && n.kind === 'esp');
+  if (admin) {
+    const st = Esp._st || (Esp._st = { motivo: '', keep: new Set() });
+    if (e && e.on) {
+      const tot = notifs.length, ok = notifs.filter((n) => n.read).length;
+      return h('div', { class: 'card esp on no-print' },
+        h('div', { class: 'exc-head' }, icon('star'), h('b', null, 'Día especial · especialidades anuladas'), tot ? h('span', { class: 'pill' + (ok === tot ? ' ok' : '') }, '✓ Enterados ' + ok + '/' + tot) : null),
+        h('p', { class: 'small' }, espTexto(date, e)),
+        tot && ok < tot ? h('p', { class: 'small muted' }, 'Faltan por darse por enterados: ' + notifs.filter((n) => !n.read).map((n) => tName(n.to)).join(', ') + '.') : null,
+        h('div', { class: 'row-end' }, h('button', { class: 'btn ghost sm', onclick: () => Esp.set(date, false) }, 'Desactivar día especial')));
+    }
+    const chips = h('div', { class: 'chips picker' }, S.school.teachers.filter((t) => t.role === 'especialista').sort((a, b) => a.name.localeCompare(b.name, 'es')).map((t) => h('button', { type: 'button', class: 'chip pick' + (st.keep.has(t.id) ? ' on' : ''), 'aria-pressed': st.keep.has(t.id) ? 'true' : 'false', onclick: () => { st.keep.has(t.id) ? st.keep.delete(t.id) : st.keep.add(t.id); refresh(Hoy); } }, avatar(t.id, 'sm'), t.name)));
+    return h('details', { class: 'card esp no-print' },
+      h('summary', { class: 'exc-head' }, icon('star'), h('b', null, 'Día especial (anular especialidades)')),
+      h('p', { class: 'small muted' }, 'Para Halloween, English Day o días con mucha ausencia: se anulan las especialidades y cada profesor se queda con su grupo. Los especialistas libres cubren primero las faltas. A todo el profesorado le sale un aviso para darse por enterado.'),
+      h('input', { type: 'text', placeholder: 'Motivo (opcional): Halloween, English Day…', maxlength: 60, value: st.motivo, oninput: (ev) => { st.motivo = ev.target.value; } }),
+      h('p', { class: 'small muted' }, 'Especialistas que SÍ mantienen su especialidad ese día (opcional):'), chips,
+      h('div', { class: 'row-end' }, h('button', { class: 'btn primary', onclick: () => Esp.set(date, true, { motivo: st.motivo.trim(), keep: [...st.keep] }) }, 'Activar y avisar a todos')));
+  }
+  if (!(e && e.on)) return null;
+  const mine = notifs.filter((n) => !n.read);
+  return h('div', { class: 'card esp on' },
+    h('div', { class: 'exc-head' }, icon('star'), h('b', null, 'Día especial'), h('span', { class: 'muted small' }, date === todayStr() ? 'Hoy' : fmtShort(date))),
+    h('p', null, espTexto(date, e)),
+    S.me && mine.length ? h('button', { class: 'btn primary md-ack-btn no-print', onclick: () => mine.forEach((n) => Mis.read(n)) }, icon('check'), 'Enterado')
+      : (S.me && notifs.length ? h('div', { class: 'md-ack done' }, h('span', { class: 'ent ok' }, '✓ Enterado')) : null));
+}
+const Esp = {
+  set(date, on, data) {
+    return enqueue(async () => {
+      const old = S.days[date] ? JSON.parse(JSON.stringify(S.days[date])) : null;
+      const day = cloneDay(date);
+      if (on) day.esp = { on: true, motivo: (data && data.motivo) || '', keep: (data && data.keep) || [], id: rid() };
+      else delete day.esp;
+      const strike = strikeIds(date).filter((i) => day.absences.some((a) => a.id === i));
+      if (day.absences.length) day.subs = assign(day, date, { ...ctxFor(date), strike }, false);
+      await saveDay(date, day, old);
+      const text = on ? espTexto(date, day.esp) : 'Se ha cancelado el día especial del ' + fmtShort(date) + ': las especialidades se dan con normalidad.';
+      const out = S.school.teachers.map((t) => ({ to: t.id, date, kind: 'esp', text, ts: Date.now(), read: false }));
+      for (const n of out) await S.db.collection('notifs').add(n);
+      if (window.pushNotify) window.pushNotify(out).catch(() => {});
+      this._st = null;
+      toast(on ? 'Día especial activado · aviso enviado a ' + plural(out.length, 'profesor', 'profesores') + (day.absences.length ? ' · revisa las sustituciones y pulsa Enviar' : '') : 'Día especial desactivado · se ha avisado al profesorado');
+    });
+  }
+};
 const Exc = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { this.sel = new Set(); this.date = todayStr(); $('#main').append(this.el); },
@@ -1380,7 +1446,7 @@ const Hoy = {
     const date = S.date, wd = weekdayKey(date);
     this.dateIn.value = date;
     this.dateLabel.textContent = fmtDate(date) + (date === todayStr() ? ' · hoy' : '');
-    this.mine.textContent = ''; { const md = miDia(date); if (md) this.mine.append(md); const ex = excCards(date); if (ex) this.mine.append(ex); }
+    this.mine.textContent = ''; { const md = miDia(date); if (md) this.mine.append(md); { const ec = espCard(date, S.admin); if (ec) this.mine.append(ec); } const ex = excCards(date); if (ex) this.mine.append(ex); }
     const prev = this.selT.value;
     this.selT.textContent = '';
     this.selT.append(h('option', { value: '' }, '— Elegir —'), sortedTeachers().map((t) => h('option', { value: t.id }, t.name + ' · ' + ROLES[t.role])));
@@ -1518,7 +1584,7 @@ const Panel = {
     el.append(h('p', { class: 'date-label' }, fmtDate(date) + (date === today ? ' · hoy' : '')));
     el.append(greeting());
     if (!S.loaded.days) return el.append(skeleton());
-    { const md = miDia(date); if (md) el.append(md); const ex = excCards(date); if (ex) el.append(ex); }
+    { const md = miDia(date); if (md) el.append(md); { const ec = espCard(date, S.admin); if (ec) el.append(ec); } const ex = excCards(date); if (ex) el.append(ex); }
     const day = S.days[date] || { absences: [], subs: [] };
     if (!weekdayKey(date)) el.append(h('p', { class: 'note warn' }, 'Fin de semana: no hay clase.'));
     else if (!day.absences.length) el.append(h('div', { class: 'empty good' }, h('div', { class: 'empty-ico' }, icon('check')), h('h3', null, 'No falta nadie'), h('p', { class: 'muted' }, date === today ? 'Hoy están todos los profesores.' : 'No hay ausencias registradas para este día.')));
@@ -2094,6 +2160,7 @@ const Centro = {
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
+        h('li', null, h('b', null, 'Día especial: '), 'jefatura puede anular las especialidades de un día (Halloween, English Day, muchas ausencias): cada profesor se queda con su grupo, los especialistas libres cubren primero las faltas y todo el profesorado debe pulsar Enterado.'),
         h('li', null, h('b', null, 'Atención educativa (AE): '), 'si falta un profesor en una hora de AE, la primera opción es Carmen (religión), salvo en 2ºA, 2ºB, 3ºA y 3ºB.'),
         h('li', null, h('b', null, 'Speaking: '), 'si a la clase que se queda sin profesora le toca desdoble de speaking, la primera opción es siempre la profesora de speaking de ese grupo en esa hora.'),
         h('li', null, h('b', null, 'Plan de apoyo de matemáticas (Belén): '), 'se la trata como una profesora más y se respeta su horario. Solo sustituye en sus horas libres o, en una hora de apoyo, si el grupo al que apoya se queda sin su profesor.'),
