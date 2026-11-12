@@ -574,7 +574,6 @@ function diffNotifs(date, day) {
 const pendingKeys = (day) => { const sent = (day && day.sent) || null, set = new Set(); if (!sent) return set; for (const x of day.subs || []) if ((x.subId || '') !== ((sent[x.key] || {}).subId || '')) set.add(x.key); return set; };
 // ¿Sigue vigente mi sustitución? Se descarta si su ausencia ya no existe o si el último aviso de ese turno es una cancelación
 function vigente(date, s) {
-  if (S.admin) return true;
   const day = S.days[date];
   if (s.absId && day && !(day.absences || []).some((a) => a.id === s.absId)) return false;
   const last = S.notifs.filter((n) => n.date === date && n.key === s.key && (n.kind === 'asigna' || n.kind === 'cancela')).sort((a, b) => (a.ts || 0) - (b.ts || 0)).pop();
@@ -1089,7 +1088,7 @@ function miDia(date) {
   if (!S.me || !tById(S.me) || !weekdayKey(date) || !S.loaded.school) return null;
   const wd = weekdayKey(date), today = todayStr(), isToday = date === today;
   const day = S.days[date] || { absences: [], subs: [] };
-  const mine = (day.subs || []).filter((x) => x.subId === S.me && vigente(date, x)).sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
+  const mine = ((S.admin ? pubDay(day) : day).subs || []).filter((x) => x.subId === S.me && vigente(date, x)).sort((a, b) => SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
   const absent = (day.absences || []).some((a) => a.tid === S.me);
   // si faltas ese día (o estás de huelga) el patio ya no es tuyo: lo cubre otra persona
   const patio = onPatio(patioForDate(S.patios[date.slice(0, 7)], date), wd, S.me) && !(day.absences || []).some((a) => a.tid === S.me && a.slots.includes('R'));
@@ -1671,7 +1670,7 @@ const Mis = {
     el.append(nCard);
     // próximas
     const mine = [];
-    for (const d in S.days) for (const s of S.days[d].subs || []) if (s.subId === S.me && vigente(d, s)) mine.push({ date: d, ...s, nota: (S.notifs.find((n) => n.date === d && n.key === s.key && n.kind === 'asigna') || {}).nota });
+    for (const d in S.days) for (const s of (S.admin ? pubDay(S.days[d]) : S.days[d]).subs || []) if (s.subId === S.me && vigente(d, s)) mine.push({ date: d, ...s, nota: (S.notifs.find((n) => n.date === d && n.key === s.key && n.kind === 'asigna') || {}).nota });
     const slotIdx = (s) => SLOT_ORDER.indexOf(s.slot);
     const up = mine.filter((m) => m.date >= today).sort((a, b) => a.date.localeCompare(b.date) || slotIdx(a) - slotIdx(b));
     const past = mine.filter((m) => m.date < today).sort((a, b) => b.date.localeCompare(a.date) || slotIdx(a) - slotIdx(b)).slice(0, 12);
