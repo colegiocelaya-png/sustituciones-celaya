@@ -235,16 +235,23 @@ function assign(day, date, ctx, resetAll) {
     return false;
   });
 
+  // clase de infantil de un especialista (inglés) cuya tutora también falta en esa franja: la cubre quien sustituya a la tutora
+  const infKey = (x) => {
+    if (roleOf(x.absentId) === 'infantil') return x.absentId;
+    if (x.slot === 'R' || roleOf(x.absentId) !== 'especialista' || !isInfGroup(x.place)) return null;
+    const tut = teachers.find((T) => T.role === 'infantil' && homeGroup(T) && norm(homeGroup(T)) === norm(x.place));
+    return tut && isAbsent(day, tut.id, x.slot) ? tut.id : null;
+  };
   for (const n of todo) {
-    if (roleOf(n.absentId) === 'infantil') {
+    if (infKey(n)) {
       // Infantil: 1 ausente -> profesora de apoyo de infantil; 2 o más -> PT y AL (mejor quien ya da clase en infantil en esa franja)
       // Faltan varias tutoras de infantil a la vez: la profesora de apoyo de infantil cubre el curso más bajo
       // y el equipo de apoyo (PT y AL) cubre el resto de franjas
-      const abs = [...new Map(todo.concat(out).filter((x) => x.slot === n.slot && roleOf(x.absentId) === 'infantil').map((x) => [x.absentId, x])).values()];
+      const abs = [...new Map(todo.concat(out).filter((x) => x.slot === n.slot && infKey(x)).map((x) => [infKey(x), x])).values()];
       const infN = abs.length;
       const curso = (x) => { const m = String(x.place || '').match(/[345]/); return (m ? m[0] : '9') + '|' + String(x.place || ''); };
-      const lowest = infN >= 2 ? abs.slice().sort((a, b) => curso(a).localeCompare(curso(b)))[0].absentId : null;
-      const kinds = infN < 2 ? ['apoyoinf', 'pt', 'dir', 'dir9'] : n.absentId === lowest ? ['apoyoinf', 'pt', 'dir', 'dir9'] : ['pt', 'dir', 'dir9'];
+      const lowest = infN >= 2 ? infKey(abs.slice().sort((a, b) => curso(a).localeCompare(curso(b)))[0]) : null;
+      const kinds = infN < 2 ? ['apoyoinf', 'pt', 'dir', 'dir9'] : infKey(n) === lowest ? ['apoyoinf', 'pt', 'dir', 'dir9'] : ['pt', 'dir', 'dir9'];
       let got = null;
       for (const kind of kinds) {
         const list = teachers.filter((T) => {
