@@ -233,6 +233,16 @@
   };
 
   /* ---------- lista de correos autorizados ---------- */
+  window.backupApi = {
+    call: function (action) {
+      return auth.currentUser.getIdToken().then(function (t) {
+        return fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ action: action }) });
+      }).then(function (r) {
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { throw new Error('HTTP ' + r.status + (j.detail ? ' · ' + j.detail : j.error ? ' · ' + j.error : '')); });
+        return action === 'download' ? r.blob() : r.json();
+      });
+    }
+  };
   window.accessApi = {
     me: function () { return ctx && ctx.email; },
     subscribe: function (cb) {

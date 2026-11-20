@@ -2130,6 +2130,33 @@ const SM = {
 views.sm = SM;
 
 /* =====================================================  CENTRO  */
+/* ---------- Copia de seguridad ---------- */
+function backupCard() {
+  const st = backupCard._st || (backupCard._st = { info: null, busy: false });
+  const el = h('div', { class: 'card no-print' });
+  const draw = () => {
+    el.textContent = '';
+    const f = (ts) => { const d = new Date(ts); return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); };
+    const i = st.info;
+    el.append(h('div', { class: 'card-head' }, h('h3', null, 'Copia de seguridad')),
+      h('p', { class: 'muted small' }, 'Cada domingo de madrugada se guarda automáticamente una copia de todos los datos (horarios, ausencias, patios, servicios mínimos y accesos). Se conservan las 8 últimas. Para tener una copia fuera de la app, descárgala de vez en cuando.'),
+      h('p', null, i === null ? 'Comprobando…' : i === undefined ? 'No se ha podido consultar.' : i.last ? 'Última copia: ' + f(i.last.ts) + ' · ' + Object.entries(i.last.counts).map(([k, v]) => v + ' ' + k).join(', ') : 'Todavía no hay ninguna copia guardada.'),
+      i && !i.cron ? h('p', { class: 'small bad-t' }, 'La copia automática aún no está activada: falta la variable CRON_SECRET en Vercel.') : null,
+      h('div', { class: 'row-end' },
+        h('button', { class: 'btn', disabled: st.busy, onclick: () => run('run') }, 'Hacer copia ahora'),
+        h('button', { class: 'btn primary', disabled: st.busy, onclick: () => run('download') }, 'Descargar copia')));
+  };
+  const load = () => window.backupApi.call('status').then((j) => { st.info = j; draw(); }).catch(() => { st.info = undefined; draw(); });
+  const run = (action) => {
+    st.busy = true; draw();
+    window.backupApi.call(action).then((r) => {
+      if (action === 'download') { const a = document.createElement('a'); a.href = URL.createObjectURL(r); a.download = 'copia-sustituciones-' + todayStr() + '.json'; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); toast('Copia descargada'); }
+      else toast('Copia guardada');
+    }).catch((e) => toast('No se pudo: ' + e.message, true)).finally(() => { st.busy = false; load(); });
+  };
+  st.info = st.info || null; draw(); load();
+  return el;
+}
 const Centro = {
   el: h('section', { class: 'view', hidden: true }), built: false, deferOnFocus: true,
   build() { $('#main').append(this.el); },
@@ -2202,6 +2229,7 @@ const Centro = {
       h('input', { type: 'text', value: sessTime(s), 'aria-label': 'Horario ' + slotLabel(s), onchange: (e) => saveSchool((x) => { x.sessions = x.sessions || {}; x.sessions[s] = e.target.value.trim(); }) }))));
     const mkNum = (id, lbl, val, f) => h('label', { class: 'field short' }, h('span', null, lbl), h('input', { type: 'number', id, min: 0, max: 20, value: val, onchange: (e) => { const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)); saveSchool((x) => { x[f] = v; }); } }));
     if (window.pushApi && S.admin) el.append(this.adminPushCard());
+    if (window.backupApi && S.admin) el.append(backupCard());
     if (window.accessApi) el.append(this.accessCard());
     el.append(h('div', { class: 'card' }, h('h3', null, 'Patios'), h('div', { class: 'row-wrap' }, mkNum('patio-prim', 'Profesores por día en el patio de primaria', S.school.patioPrim || 6, 'patioPrim'), mkNum('patio-inf', 'Profesores por día en el patio de infantil', S.school.patioInf || 5, 'patioInf'))));
     el.append(h('div', { class: 'card' }, h('h3', null, 'Horario de sesiones'), times,
