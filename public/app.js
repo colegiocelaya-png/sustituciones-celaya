@@ -20,6 +20,9 @@ const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').t
 const isSpecial = (r) => r === 'pt' || r === 'al';
 const RELIGION = 'carmen-gordillo', AE_NO = ['2ºA', '2ºB', '3ºA', '3ºB'];
 const isAE = (n) => !!(n && /atenci[oó]n educativa/i.test(n.subject || '') && !AE_NO.some((g) => norm(n.place || '').includes(norm(g))));
+// profesorado que hace sus patios en infantil: no cubre patios de primaria (sí los de infantil)
+const PATIO_INFANTIL = ['carmen-gordillo', 'pilar'];
+const patioPrimaria = (n) => !!n && n.slot === 'R' && !/infantil/i.test(n.place || '');
 const PLAN_ESPECIFICO = ['belen']; // no se les quita el apoyo para sustituir, salvo si su grupo se queda sin profesor
 const isPrim = (T) => T.role === 'tutor' || T.role === 'especialista';
 // grupo de referencia de un tutor: el que más horas tiene en su horario
@@ -189,7 +192,7 @@ function assign(day, date, ctx, resetAll) {
     const o = old.get(n.key);
     const keep = !resetAll && o && o.subId && teachers.some((t) => t.id === o.subId) && !isAbsent(day, o.subId, n.slot) && !(n.strike && !(ctx.sm || []).includes(o.subId));
     // una asignación automática antigua que incumple el horario de un profesor de plan específico (Belén) se vuelve a repartir
-    const planBad = (() => { if (!o || !o.subId || o.manual || !PLAN_ESPECIFICO.includes(o.subId)) return false; const T = teachers.find((t) => t.id === o.subId), c = n.slot === 'R' ? null : cellOf(T, wd, n.slot); return !(c && (c.t === 'l' || (c.t === 'a' && c.g && n.place && norm(n.place).includes(norm(c.g))))); })();
+    const planBad = (() => { if (o && o.subId && !o.manual && PATIO_INFANTIL.includes(o.subId) && patioPrimaria(n)) return true; if (!o || !o.subId || o.manual || !PLAN_ESPECIFICO.includes(o.subId)) return false; const T = teachers.find((t) => t.id === o.subId), c = n.slot === 'R' ? null : cellOf(T, wd, n.slot); return !(c && (c.t === 'l' || (c.t === 'a' && c.g && n.place && norm(n.place).includes(norm(c.g))))); })();
     if (keep && !planBad) {
       out.push({ ...n, subId: o.subId, tier: o.tier || 0, fb: !!o.fb, manual: !!o.manual });
       mark(n.slot, o.subId);
@@ -211,6 +214,7 @@ function assign(day, date, ctx, resetAll) {
     if (slot === 'R') {
       if (onPatio(ctx.patio, wd, T.id)) return false;
       if (PLAN_ESPECIFICO.includes(T.id)) return false;
+      if (PATIO_INFANTIL.includes(T.id) && patioPrimaria(need)) return false;
       if (tier === 1) return isPrim(T);
       if (tier === 3) return isSpecial(T.role);
       return false; // el equipo directivo no cubre patio
@@ -758,7 +762,8 @@ function fixPlanEspecifico() {
       const T = tById(x.subId), c = x.slot === 'R' ? null : cellOf(T, wd, x.slot);
       return !(c && (c.t === 'l' || (c.t === 'a' && c.g && x.place && norm(x.place).includes(norm(c.g)))));
     });
-    const bad = bad1 || bad2;
+    const bad3 = (day.subs || []).some((x) => x.subId && !x.manual && PATIO_INFANTIL.includes(x.subId) && patioPrimaria(x));
+    const bad = bad1 || bad2 || bad3;
     const sig = date + '|' + JSON.stringify((day.subs || []).map((x) => x.key + x.subId));
     if (!bad || _fixDone.has(sig)) continue;
     _fixDone.add(sig);
@@ -2180,6 +2185,7 @@ const Centro = {
         h('li', null, h('b', null, '1 ausente: '), 'hora libre, coordinación (COO) y equipo directivo. No se quitan apoyos.'),
         h('li', null, h('b', null, '2 ausentes: '), 'hora libre, coordinación, apoyos (y speaking) y equipo directivo.'),
         h('li', null, h('b', null, '3 o más: '), 'hora libre, coordinación, apoyos (y speaking), PT y AL y, por último, equipo directivo.'),
+        h('li', null, h('b', null, 'Patios: '), 'Carmen y Pilar hacen sus patios en infantil, así que no cubren patios de primaria (sí los de infantil).'),
         h('li', null, h('b', null, 'Inglés de infantil: '), 'Merche (3 años), Alba (4 años) y Sergio (5 años) dan inglés en infantil. Si falta uno de ellos, esas clases las cubre siempre la tutora del grupo de infantil correspondiente.'),
         h('li', null, h('b', null, 'Día especial: '), 'jefatura puede anular las especialidades de un día (Halloween, English Day, muchas ausencias): cada profesor se queda con su grupo, los especialistas libres cubren primero las faltas y todo el profesorado debe pulsar Enterado.'),
         h('li', null, h('b', null, 'Atención educativa (AE): '), 'si falta un profesor en una hora de AE, la primera opción es Carmen (religión), salvo en 2ºA, 2ºB, 3ºA y 3ºB.'),
