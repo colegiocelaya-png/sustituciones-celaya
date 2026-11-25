@@ -297,7 +297,7 @@ function assign(day, date, ctx, resetAll) {
     //  3 o más: libre, coordinación, apoyo (y speaking), PT/AL, directivo
     const order = absentNow <= 1 ? [1, 6, 4, 9] : absentNow === 2 ? [1, 6, 2, 7, 4, 9] : [1, 6, 2, 7, 3, 4, 9];
     // quien se queda libre porque su grupo está de excursión cubre primero las ausencias que no son de excursión
-    if (!isExcAbs(n) && n.slot !== 'R' && Object.keys(freed).length) order.unshift(10);
+    if (n.slot !== 'R' && Object.keys(freed).length) order.unshift(10); // también para las clases que deja quien va de excursión (p. ej. su inglés en otro curso)
     // si la clase que queda sin profesor tiene desdoble de speaking, lo cubre siempre en primer lugar la profesora de speaking de ese grupo
     if (n.slot !== 'R') order.unshift(11);
     // atención educativa (AE): la profesora de religión la cubre en primer lugar, salvo en 2ºA, 2ºB, 3ºA y 3ºB
@@ -2218,7 +2218,7 @@ const Centro = {
         h('li', null, h('b', null, 'Atención educativa (AE): '), 'si falta un profesor en una hora de AE, la primera opción es Carmen (religión), salvo en 2ºA, 2ºB, 3ºA y 3ºB.'),
         h('li', null, h('b', null, 'Speaking: '), 'si a la clase que se queda sin profesora le toca desdoble de speaking, la primera opción es siempre la profesora de speaking de ese grupo en esa hora.'),
         h('li', null, h('b', null, 'Plan de apoyo de matemáticas (Belén): '), 'se la trata como una profesora más y se respeta su horario. Solo sustituye en sus horas libres o, en una hora de apoyo, si el grupo al que apoya se queda sin su profesor.'),
-        h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias que no sean de excursión.'),
+        h('li', null, h('b', null, 'Excursiones: '), 'si el grupo de un tutor se va de excursión, los especialistas que ese día daban clase a ese grupo quedan libres y son los primeros en cubrir ausencias, incluidas las clases que dejan los profesores que van a la excursión (por ejemplo su inglés en otro curso).'),
         h('li', null, h('b', null, 'Infantil: '), 'si falta una tutora de infantil, Ana Hernández (apoyo de infantil) cubre todas sus franjas. Si faltan 2 o más a la vez, Ana cubre el curso más bajo de los que faltan y el equipo de apoyo (PT y AL) cubre las franjas del resto, mejor quien en esa franja ya esté dando clase en infantil. Las horas en que dan clase las especialistas de inglés, música o religión no necesitan sustituto.'),
         h('li', null, h('b', null, 'Equipo directivo: '), 'siempre el último nivel, hasta ' + (S.school.maxDir || 2) + ' sustituciones al día cada uno; si no queda nadie más, cubre aunque lo supere. El equipo directivo no cubre el patio. Entre ellos se elige a quien tenga menos carga ese día (clases propias + sustituciones), para que la carga lectiva quede equilibrada.')),
       h('p', { class: 'muted small' }, 'Huelga: cuando una ausencia se marca como huelga, solo la pueden cubrir los profesores marcados como servicios mínimos ese día, con el mismo orden de criterios. El motivo solo lo ves tú.'),
